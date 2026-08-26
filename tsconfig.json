@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "declaration": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "rootDir": "./src",
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "outDir": "dist/esm",
+    "preserveConstEnums": true,
+    "removeComments": false,
+    "sourceMap": true,
+    "target": "ES2020",
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*"]
+}
