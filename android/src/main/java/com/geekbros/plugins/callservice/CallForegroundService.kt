@@ -8,11 +8,16 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
-import androidx.annotation.Nullable
+import android.os.Looper
+import java.net.HttpURLConnection
+import java.net.URL
 
 class CallForegroundService : Service() {
 
@@ -28,11 +33,15 @@ class CallForegroundService : Service() {
         const val EXTRA_TITLE = "extra_title"
         const val EXTRA_BODY = "extra_body"
         const val EXTRA_PARTNER_NAME = "extra_partner_name"
+        const val EXTRA_PARTNER_PHOTO = "extra_partner_photo"
         const val EXTRA_CALL_TYPE = "extra_call_type"
         const val EXTRA_DURATION = "extra_duration"
         const val EXTRA_IS_MUTED = "extra_is_muted"
         const val EXTRA_IS_SPEAKER_ON = "extra_is_speaker_on"
     }
+
+    private var cachedPhotoUrl: String? = null
+    private var cachedPhotoBitmap: Bitmap? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -50,11 +59,14 @@ class CallForegroundService : Service() {
                 val title = extras.getString(EXTRA_TITLE, "Minglo Call")
                 val body = extras.getString(EXTRA_BODY, "Active call")
                 val partnerName = extras.getString(EXTRA_PARTNER_NAME, "Minglo User")
+                val partnerPhoto = extras.getString(EXTRA_PARTNER_PHOTO, null)
                 val callType = extras.getString(EXTRA_CALL_TYPE, "voice")
                 val isMuted = extras.getBoolean(EXTRA_IS_MUTED, false)
                 val isSpeakerOn = extras.getBoolean(EXTRA_IS_SPEAKER_ON, false)
 
                 createNotificationChannel()
+                fetchPhotoIfNeeded(partnerPhoto, title, body, partnerName, callType, isMuted, isSpeakerOn)
+
                 val notification = buildCallNotification(title, body, partnerName, callType, isMuted, isSpeakerOn)
 
                 if (intent.action == ACTION_UPDATE) {
@@ -81,10 +93,45 @@ class CallForegroundService : Service() {
         return START_STICKY
     }
 
+    private fun fetchPhotoIfNeeded(photoUrl: String?, title: String, body: String, partnerName: String, callType: String, isMuted: Boolean, isSpeakerOn: Boolean) {
+        if (photoUrl.isNullOrEmpty() || photoUrl == cachedPhotoUrl) return
+        cachedPhotoUrl = photoUrl
+        cachedPhotoBitmap = null
+
+        Thread {
+            try {
+                val url = URL(photoUrl)
+                val connection = url.openConnection() as HttpURLConnection
+                connection.doInput = true
+                connection.connectTimeout = 4000
+                connection.readTimeout = 4000
+                connection.connect()
+                val inputStream = connection.inputStream
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                inputStream.close()
+
+                if (bitmap != null) {
+                    cachedPhotoBitmap = bitmap
+                    Handler(Looper.getMainLooper()).post {
+                        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        val notification = buildCallNotification(title, body, partnerName, callType, isMuted, isSpeakerOn)
+                        manager.notify(NOTIFICATION_ID, notification)
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore image fetch failure
+            }
+        }.start()
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             var channel = manager.getNotificationChannel(CHANNEL_ID)
+            if (channel != null && channel.importance != NotificationManager.IMPORTANCE_LOW) {
+                manager.deleteNotificationChannel(CHANNEL_ID)
+                channel = null
+            }
             if (channel == null) {
                 channel = NotificationChannel(
                     CHANNEL_ID,
@@ -94,6 +141,7 @@ class CallForegroundService : Service() {
                     description = "Keeps your Minglo video/voice call active when app is backgrounded"
                     setSound(null, null)
                     enableVibration(false)
+                    setShowBadge(false)
                 }
                 manager.createNotificationChannel(channel)
             }
@@ -137,9 +185,22 @@ class CallForegroundService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+
+        if (cachedPhotoBitmap != null) {
+            builder.setLargeIcon(cachedPhotoBitmap)
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             builder.setPriority(Notification.PRIORITY_LOW)
         }
+
+        @Suppress("DEPRECATION")
+        builder.setDefaults(0)
+        builder.setSound(null)
+        builder.setVibrate(longArrayOf(0L))
 
         // Build Action Intents
         val hangupIntent = Intent(this, CallNotificationReceiver::class.java).apply {
@@ -161,9 +222,14 @@ class CallForegroundService : Service() {
         val speakerTitle = if (isSpeakerOn) "Earpiece" else "Speaker"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val callerPerson = android.app.Person.Builder()
+            val personBuilder = android.app.Person.Builder()
                 .setName(partnerName)
-                .build()
+
+            if (cachedPhotoBitmap != null) {
+                personBuilder.setIcon(Icon.createWithBitmap(cachedPhotoBitmap))
+            }
+
+            val callerPerson = personBuilder.build()
 
             val callStyle = Notification.CallStyle.forOngoingCall(callerPerson, hangupPendingIntent)
             if (callType == "video") {

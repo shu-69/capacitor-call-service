@@ -4,6 +4,7 @@ export interface StartCallServiceOptions {
   title?: string;
   body?: string;
   partnerName?: string;
+  partnerPhoto?: string;
   callType?: 'video' | 'voice';
   durationSeconds?: number;
   isMuted?: boolean;
@@ -13,6 +14,8 @@ export interface StartCallServiceOptions {
 export interface UpdateCallServiceOptions {
   title?: string;
   body?: string;
+  partnerName?: string;
+  partnerPhoto?: string;
   durationSeconds?: number;
   isMuted?: boolean;
   isSpeakerOn?: boolean;
