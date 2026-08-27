@@ -13,7 +13,11 @@
     "removeComments": false,
     "sourceMap": true,
     "target": "ES2020",
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@capacitor/core": ["../../frontend/node_modules/@capacitor/core"]
+    }
   },
   "include": ["src/**/*"]
 }

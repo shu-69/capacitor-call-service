@@ -173,8 +173,8 @@ class CallForegroundService : Service() {
             val muteAction = Notification.Action.Builder(null, muteTitle, mutePendingIntent).build()
             val speakerAction = Notification.Action.Builder(null, speakerTitle, speakerPendingIntent).build()
 
-            callStyle.addAction(muteAction)
-            callStyle.addAction(speakerAction)
+            builder.addAction(muteAction)
+            builder.addAction(speakerAction)
 
             builder.setStyle(callStyle)
         } else {
