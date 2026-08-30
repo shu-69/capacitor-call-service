@@ -18,6 +18,7 @@ import android.os.IBinder
 import android.os.Looper
 import java.net.HttpURLConnection
 import java.net.URL
+import android.util.Log
 
 class CallForegroundService : Service() {
 
@@ -73,19 +74,27 @@ class CallForegroundService : Service() {
                     val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     manager.notify(NOTIFICATION_ID, notification)
                 } else {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-                        } else {
-                            0
-                        }
-                        if (fgsType != 0) {
-                            startForeground(NOTIFICATION_ID, notification, fgsType)
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                            } else {
+                                0
+                            }
+                            if (fgsType != 0) {
+                                startForeground(NOTIFICATION_ID, notification, fgsType)
+                            } else {
+                                startForeground(NOTIFICATION_ID, notification)
+                            }
                         } else {
                             startForeground(NOTIFICATION_ID, notification)
                         }
-                    } else {
-                        startForeground(NOTIFICATION_ID, notification)
+                    } catch (e: Exception) {
+                        Log.w("CallForegroundService", "startForeground failed ($e), falling back to background notification", e)
+                        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        manager.notify(NOTIFICATION_ID, notification)
+                        stopSelf()
+                        return START_NOT_STICKY
                     }
                 }
             }

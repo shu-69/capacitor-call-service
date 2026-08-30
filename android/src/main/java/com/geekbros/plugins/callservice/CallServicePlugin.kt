@@ -1,6 +1,7 @@
 package com.geekbros.plugins.callservice
 
 import android.content.Intent
+import android.util.Log
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -55,7 +56,13 @@ class CallServicePlugin : Plugin() {
                 putExtra(CallForegroundService.EXTRA_IS_SPEAKER_ON, isSpeakerOn)
             }
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
+                try {
+                    context.startForegroundService(intent)
+                } catch (e: Exception) {
+                    Log.w("CallServicePlugin", "startForegroundService failed: ${e.message}", e)
+                    call.reject("Failed to start CallForegroundService: ${e.message}", e)
+                    return
+                }
             } else {
                 context.startService(intent)
             }
