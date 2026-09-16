@@ -1,5 +1,6 @@
 package com.geekbros.plugins.callservice
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -23,6 +25,7 @@ import android.util.Log
 class CallForegroundService : Service() {
 
     companion object {
+        private const val TAG = "CallForegroundService"
         const val NOTIFICATION_ID = 10001
         const val CHANNEL_ID = "call_channel"
         const val CHANNEL_NAME = "Active Call Continuity"
@@ -41,17 +44,30 @@ class CallForegroundService : Service() {
         const val EXTRA_IS_SPEAKER_ON = "extra_is_speaker_on"
     }
 
+    @Volatile
+    private var isForegroundActive: Boolean = false
     private var cachedPhotoUrl: String? = null
     private var cachedPhotoBitmap: Bitmap? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent == null) return START_STICKY
+        if (intent == null) {
+            if (!isForegroundActive) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            return START_STICKY
+        }
 
         when (intent.action) {
             ACTION_STOP -> {
-                stopForeground(true)
+                isForegroundActive = false
+                try {
+                    stopForeground(true)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error stopping foreground: ${e.message}", e)
+                }
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -71,35 +87,88 @@ class CallForegroundService : Service() {
                 val notification = buildCallNotification(title, body, partnerName, callType, isMuted, isSpeakerOn)
 
                 if (intent.action == ACTION_UPDATE) {
-                    val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    manager.notify(NOTIFICATION_ID, notification)
-                } else {
+                    if (!isForegroundActive) {
+                        Log.w(TAG, "Skipping notification update: service is not actively in foreground")
+                        return START_NOT_STICKY
+                    }
                     try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-                            } else {
-                                0
-                            }
-                            if (fgsType != 0) {
-                                startForeground(NOTIFICATION_ID, notification, fgsType)
-                            } else {
-                                startForeground(NOTIFICATION_ID, notification)
-                            }
-                        } else {
-                            startForeground(NOTIFICATION_ID, notification)
-                        }
-                    } catch (e: Exception) {
-                        Log.w("CallForegroundService", "startForeground failed ($e), falling back to background notification", e)
                         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                         manager.notify(NOTIFICATION_ID, notification)
-                        stopSelf()
-                        return START_NOT_STICKY
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error updating foreground call notification: ${e.message}", e)
+                    }
+                } else {
+                    try {
+                        val fgsType = determineForegroundServiceType(callType)
+                        startServiceInForeground(notification, fgsType)
+                        isForegroundActive = true
+                        val grantedType = if (fgsType and ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA != 0) "mic+camera" else "mic-only"
+                        CallServicePlugin.onForegroundServiceStarted(true, null, grantedType)
+                        Log.i(TAG, "startForeground succeeded with type=$fgsType")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Initial startForeground with type failed ($e). Attempting retry with reduced type...", e)
+                        var retrySuccess = false
+                        try {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                val reducedType = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                                startServiceInForeground(notification, reducedType)
+                                isForegroundActive = true
+                                retrySuccess = true
+                                CallServicePlugin.onForegroundServiceStarted(true, null, "mic-only")
+                                Log.i(TAG, "startForeground retry succeeded with reduced type MICROPHONE")
+                            }
+                        } catch (retryErr: Exception) {
+                            Log.w(TAG, "startForeground retry with MICROPHONE also failed: ${retryErr.message}")
+                        }
+
+                        if (!retrySuccess) {
+                            Log.e(TAG, "All startForeground attempts failed. Falling back gracefully without CallStyle.")
+                            isForegroundActive = false
+                            try {
+                                val fallbackNotification = buildFallbackNotification(title, body)
+                                val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                                manager.notify(NOTIFICATION_ID, fallbackNotification)
+                            } catch (fallbackErr: Exception) {
+                                Log.e(TAG, "Failed to post fallback notification: ${fallbackErr.message}", fallbackErr)
+                            }
+                            CallServicePlugin.onForegroundServiceStarted(false, "startForeground failed", "none")
+                            stopSelf()
+                            return START_NOT_STICKY
+                        }
                     }
                 }
             }
         }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        isForegroundActive = false
+    }
+
+    private fun determineForegroundServiceType(callType: String): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
+
+        var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val hasCameraPermission = checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+            if (callType.equals("video", ignoreCase = true) && hasCameraPermission) {
+                type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+            }
+        }
+        return type
+    }
+
+    private fun startServiceInForeground(notification: Notification, fgsType: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && fgsType != 0) {
+            startForeground(NOTIFICATION_ID, notification, fgsType)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun fetchPhotoIfNeeded(photoUrl: String?, title: String, body: String, partnerName: String, callType: String, isMuted: Boolean, isSpeakerOn: Boolean) {
@@ -122,9 +191,17 @@ class CallForegroundService : Service() {
                 if (bitmap != null) {
                     cachedPhotoBitmap = bitmap
                     Handler(Looper.getMainLooper()).post {
-                        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                        val notification = buildCallNotification(title, body, partnerName, callType, isMuted, isSpeakerOn)
-                        manager.notify(NOTIFICATION_ID, notification)
+                        if (!isForegroundActive) {
+                            Log.d(TAG, "Skipping photo notification update: service is no longer in foreground")
+                            return@post
+                        }
+                        try {
+                            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                            val notification = buildCallNotification(title, body, partnerName, callType, isMuted, isSpeakerOn)
+                            manager.notify(NOTIFICATION_ID, notification)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error updating notification with photo: ${e.message}", e)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -157,6 +234,38 @@ class CallForegroundService : Service() {
         }
     }
 
+    private fun buildFallbackNotification(title: String, body: String): Notification {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val pendingIntentFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val contentIntent = PendingIntent.getActivity(this, 0, launchIntent, pendingIntentFlags)
+
+        val iconResId = resources.getIdentifier("ic_stat_notify", "drawable", packageName).let {
+            if (it != 0) it else applicationInfo.icon
+        }
+
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+
+        builder.setContentTitle(title)
+            .setContentText(body)
+            .setSmallIcon(iconResId)
+            .setContentIntent(contentIntent)
+            .setOngoing(false)
+            .setAutoCancel(true)
+
+        return builder.build()
+    }
+
     private fun buildCallNotification(
         title: String,
         body: String,
@@ -174,6 +283,7 @@ class CallForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
         val contentIntent = PendingIntent.getActivity(this, 0, launchIntent, pendingIntentFlags)
+        val fullScreenPendingIntent = PendingIntent.getActivity(this, 100, launchIntent, pendingIntentFlags)
 
         // Resolving notification small icon
         val iconResId = resources.getIdentifier("ic_stat_notify", "drawable", packageName).let {
@@ -191,6 +301,7 @@ class CallForegroundService : Service() {
             .setContentText(body)
             .setSmallIcon(iconResId)
             .setContentIntent(contentIntent)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
 

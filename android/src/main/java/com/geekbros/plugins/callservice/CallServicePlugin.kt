@@ -1,6 +1,8 @@
 package com.geekbros.plugins.callservice
 
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
@@ -15,6 +17,9 @@ class CallServicePlugin : Plugin() {
 
     companion object {
         private var staticBridge: Bridge? = null
+        private var pendingStartCall: PluginCall? = null
+        private val timeoutHandler = Handler(Looper.getMainLooper())
+        private var timeoutRunnable: Runnable? = null
 
         fun onActionPressed(eventName: String) {
             staticBridge?.let { bridge ->
@@ -23,6 +28,25 @@ class CallServicePlugin : Plugin() {
                     val instance = handle.instance as? CallServicePlugin
                     instance?.notifyListeners(eventName, JSObject())
                 }
+            }
+        }
+
+        fun onForegroundServiceStarted(success: Boolean, errorMsg: String? = null, grantedType: String = "none") {
+            timeoutRunnable?.let { timeoutHandler.removeCallbacks(it) }
+            timeoutRunnable = null
+
+            val call = pendingStartCall
+            pendingStartCall = null
+
+            call?.let {
+                val ret = JSObject().apply {
+                    put("started", success)
+                    put("grantedType", grantedType)
+                    if (!success) {
+                        put("error", errorMsg ?: "Failed to start foreground service")
+                    }
+                }
+                it.resolve(ret)
             }
         }
     }
@@ -44,6 +68,14 @@ class CallServicePlugin : Plugin() {
         val isSpeakerOn = call.getBoolean("isSpeakerOn", false)
 
         try {
+            pendingStartCall = call
+            timeoutRunnable?.let { timeoutHandler.removeCallbacks(it) }
+            val timeout = Runnable {
+                onForegroundServiceStarted(false, "Service start timed out", "none")
+            }
+            timeoutRunnable = timeout
+            timeoutHandler.postDelayed(timeout, 5000)
+
             val intent = Intent(context, CallForegroundService::class.java).apply {
                 action = CallForegroundService.ACTION_START
                 putExtra(CallForegroundService.EXTRA_TITLE, title)
@@ -60,15 +92,26 @@ class CallServicePlugin : Plugin() {
                     context.startForegroundService(intent)
                 } catch (e: Exception) {
                     Log.w("CallServicePlugin", "startForegroundService failed: ${e.message}", e)
-                    call.reject("Failed to start CallForegroundService: ${e.message}", e)
+                    timeoutRunnable?.let { timeoutHandler.removeCallbacks(it) }
+                    pendingStartCall = null
+                    call.resolve(JSObject().apply {
+                        put("started", false)
+                        put("grantedType", "none")
+                        put("error", e.message)
+                    })
                     return
                 }
             } else {
                 context.startService(intent)
             }
-            call.resolve()
         } catch (e: Exception) {
-            call.reject("Failed to start CallForegroundService: ${e.message}", e)
+            timeoutRunnable?.let { timeoutHandler.removeCallbacks(it) }
+            pendingStartCall = null
+            call.resolve(JSObject().apply {
+                put("started", false)
+                put("grantedType", "none")
+                put("error", e.message)
+            })
         }
     }
 

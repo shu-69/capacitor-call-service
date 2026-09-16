@@ -21,8 +21,14 @@ export interface UpdateCallServiceOptions {
   isSpeakerOn?: boolean;
 }
 
+export interface StartCallServiceResult {
+  started: boolean;
+  grantedType?: 'mic-only' | 'mic+camera' | 'none';
+  error?: string;
+}
+
 export interface CallServicePlugin {
-  startCallService(options?: StartCallServiceOptions): Promise<void>;
+  startCallService(options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
   updateCallService(options?: UpdateCallServiceOptions): Promise<void>;
   stopCallService(): Promise<void>;
 

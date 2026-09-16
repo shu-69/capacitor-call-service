@@ -3,13 +3,14 @@
     package="com.geekbros.plugins.callservice">
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
 
     <application>
         <service
             android:name="com.geekbros.plugins.callservice.CallForegroundService"
-            android:foregroundServiceType="microphone|camera"
+            android:foregroundServiceType="phoneCall|microphone|camera"
             android:exported="false" />
 
         <receiver
