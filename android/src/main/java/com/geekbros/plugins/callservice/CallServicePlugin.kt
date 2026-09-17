@@ -56,6 +56,16 @@ class CallServicePlugin : Plugin() {
         staticBridge = bridge
     }
 
+    override fun handleOnDestroy() {
+        super.handleOnDestroy()
+        if (staticBridge == bridge) {
+            staticBridge = null
+        }
+        pendingStartCall = null
+        timeoutRunnable?.let { timeoutHandler.removeCallbacks(it) }
+        timeoutRunnable = null
+    }
+
     @PluginMethod
     fun startCallService(call: PluginCall) {
         val title = call.getString("title", "Minglo Call")

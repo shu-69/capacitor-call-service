@@ -297,13 +297,17 @@ class CallForegroundService : Service() {
             Notification.Builder(this)
         }
 
+        val cleanBody = if (body.contains(" • ")) body.substringBefore(" • ") else body
+
         builder.setContentTitle(title)
-            .setContentText(body)
+            .setContentText(cleanBody)
             .setSmallIcon(iconResId)
             .setContentIntent(contentIntent)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setShowWhen(true)
+            .setUsesChronometer(true)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
