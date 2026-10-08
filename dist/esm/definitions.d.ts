@@ -47,9 +47,13 @@ export interface CallServicePlugin {
     setAudioOutput(options: SetAudioOutputOptions): Promise<void>;
     startAudioRouting(options?: StartAudioRoutingOptions): Promise<AudioOutputsResult>;
     stopAudioRouting(): Promise<void>;
+    checkBluetoothPermission(): Promise<{
+        granted: boolean;
+    }>;
     requestBluetoothPermission(): Promise<{
         granted: boolean;
     }>;
+    openAppSettings(): Promise<void>;
     addListener(eventName: 'hangup_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'mute_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'speaker_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;

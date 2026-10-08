@@ -47,7 +47,15 @@ export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
     // No-op on web
   }
 
+  async checkBluetoothPermission(): Promise<{ granted: boolean }> {
+    return { granted: true };
+  }
+
   async requestBluetoothPermission(): Promise<{ granted: boolean }> {
     return { granted: true };
+  }
+
+  async openAppSettings(): Promise<void> {
+    // No-op on web
   }
 }

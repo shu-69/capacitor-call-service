@@ -247,6 +247,31 @@ class CallServicePlugin : Plugin() {
     }
 
     @PluginMethod
+    fun checkBluetoothPermission(call: PluginCall) {
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioRouteManager.hasBluetoothPermission()
+        } else {
+            true
+        }
+        call.resolve(JSObject().apply { put("granted", granted) })
+    }
+
+    @PluginMethod
+    fun openAppSettings(call: PluginCall) {
+        try {
+            val intent = Intent(
+                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:${context.packageName}")
+            )
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Failed to open app settings: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
     fun requestBluetoothPermission(call: PluginCall) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (audioRouteManager.hasBluetoothPermission()) {

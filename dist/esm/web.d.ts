@@ -8,7 +8,11 @@ export declare class CallServiceWeb extends WebPlugin implements CallServicePlug
     setAudioOutput(_options: SetAudioOutputOptions): Promise<void>;
     startAudioRouting(_options?: StartAudioRoutingOptions): Promise<AudioOutputsResult>;
     stopAudioRouting(): Promise<void>;
+    checkBluetoothPermission(): Promise<{
+        granted: boolean;
+    }>;
     requestBluetoothPermission(): Promise<{
         granted: boolean;
     }>;
+    openAppSettings(): Promise<void>;
 }

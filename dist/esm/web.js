@@ -30,8 +30,14 @@ export class CallServiceWeb extends WebPlugin {
     async stopAudioRouting() {
         // No-op on web
     }
+    async checkBluetoothPermission() {
+        return { granted: true };
+    }
     async requestBluetoothPermission() {
         return { granted: true };
+    }
+    async openAppSettings() {
+        // No-op on web
     }
 }
 //# sourceMappingURL=web.js.map
