@@ -1,19 +1,36 @@
 package com.geekbros.plugins.callservice
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.getcapacitor.Bridge
+import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginHandle
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
+import com.getcapacitor.annotation.Permission
+import com.getcapacitor.annotation.PermissionCallback
 
-@CapacitorPlugin(name = "CallService")
+@CapacitorPlugin(
+    name = "CallService",
+    permissions = [
+        Permission(
+            alias = "bluetooth",
+            strings = [
+                Manifest.permission.BLUETOOTH_CONNECT
+            ]
+        )
+    ]
+)
 class CallServicePlugin : Plugin() {
+
+    private lateinit var audioRouteManager: AudioRouteManager
 
     companion object {
         private var staticBridge: Bridge? = null
@@ -54,6 +71,10 @@ class CallServicePlugin : Plugin() {
     override fun load() {
         super.load()
         staticBridge = bridge
+        audioRouteManager = AudioRouteManager(context)
+        audioRouteManager.setOnOutputsChangedListener { resultData ->
+            notifyListeners("audioOutputsChanged", formatOutputsResult(resultData))
+        }
     }
 
     override fun handleOnDestroy() {
@@ -64,6 +85,24 @@ class CallServicePlugin : Plugin() {
         pendingStartCall = null
         timeoutRunnable?.let { timeoutHandler.removeCallbacks(it) }
         timeoutRunnable = null
+        if (::audioRouteManager.isInitialized) {
+            audioRouteManager.stopAudioRouting()
+        }
+    }
+
+    private fun formatOutputsResult(data: AudioOutputsResultData): JSObject {
+        val ret = JSObject()
+        val arr = JSArray()
+        for (item in data.available) {
+            arr.put(JSObject().apply {
+                put("type", item.type)
+                put("name", item.name)
+            })
+        }
+        ret.put("available", arr)
+        ret.put("active", data.active)
+        ret.put("hasBluetoothPermission", data.hasBluetoothPermission)
+        return ret
     }
 
     @PluginMethod
@@ -158,6 +197,9 @@ class CallServicePlugin : Plugin() {
     @PluginMethod
     fun stopCallService(call: PluginCall) {
         try {
+            if (::audioRouteManager.isInitialized) {
+                audioRouteManager.stopAudioRouting()
+            }
             val intent = Intent(context, CallForegroundService::class.java).apply {
                 action = CallForegroundService.ACTION_STOP
             }
@@ -166,5 +208,61 @@ class CallServicePlugin : Plugin() {
         } catch (e: Exception) {
             call.reject("Failed to stop CallForegroundService: ${e.message}", e)
         }
+    }
+
+    // --- Audio Routing Plugin Methods ---
+
+    @PluginMethod
+    fun getAudioOutputs(call: PluginCall) {
+        val result = audioRouteManager.getOutputsResult()
+        call.resolve(formatOutputsResult(result))
+    }
+
+    @PluginMethod
+    fun setAudioOutput(call: PluginCall) {
+        val type = call.getString("type")
+        if (type == null) {
+            call.reject("Audio output 'type' parameter is required")
+            return
+        }
+        val success = audioRouteManager.setAudioOutput(type)
+        if (success) {
+            call.resolve()
+        } else {
+            call.reject("Failed to set audio output to '$type': not currently available")
+        }
+    }
+
+    @PluginMethod
+    fun startAudioRouting(call: PluginCall) {
+        val callType = call.getString("callType", "voice")
+        val result = audioRouteManager.startAudioRouting(callType)
+        call.resolve(formatOutputsResult(result))
+    }
+
+    @PluginMethod
+    fun stopAudioRouting(call: PluginCall) {
+        audioRouteManager.stopAudioRouting()
+        call.resolve()
+    }
+
+    @PluginMethod
+    fun requestBluetoothPermission(call: PluginCall) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (audioRouteManager.hasBluetoothPermission()) {
+                call.resolve(JSObject().apply { put("granted", true) })
+            } else {
+                requestPermissionForAlias("bluetooth", call, "bluetoothPermCallback")
+            }
+        } else {
+            call.resolve(JSObject().apply { put("granted", true) })
+        }
+    }
+
+    @PermissionCallback
+    private fun bluetoothPermCallback(call: PluginCall) {
+        val granted = audioRouteManager.hasBluetoothPermission()
+        call.resolve(JSObject().apply { put("granted", granted) })
+        notifyListeners("audioOutputsChanged", formatOutputsResult(audioRouteManager.getOutputsResult()))
     }
 }
