@@ -235,7 +235,7 @@ class CallServicePlugin : Plugin() {
 
     @PluginMethod
     fun startAudioRouting(call: PluginCall) {
-        val callType = call.getString("callType", "voice")
+        val callType = call.getString("callType", "voice") ?: "voice"
         val result = audioRouteManager.startAudioRouting(callType)
         call.resolve(formatOutputsResult(result))
     }
