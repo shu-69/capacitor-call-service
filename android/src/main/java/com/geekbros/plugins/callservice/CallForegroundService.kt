@@ -142,6 +142,20 @@ class CallForegroundService : Service() {
         return START_STICKY
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.i(TAG, "Task removed (app swiped away). Stopping foreground service and removing notification.")
+        isForegroundActive = false
+        try {
+            stopForeground(true)
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.cancel(NOTIFICATION_ID)
+        } catch (e: Exception) {
+            Log.w(TAG, "Error cleaning up notification onTaskRemoved: ${e.message}")
+        }
+        stopSelf()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         isForegroundActive = false
