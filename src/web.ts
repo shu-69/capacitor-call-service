@@ -7,6 +7,7 @@ import type {
   AudioOutputsResult,
   SetAudioOutputOptions,
   StartAudioRoutingOptions,
+  CallIntentResult,
 } from './definitions';
 
 export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
@@ -56,6 +57,14 @@ export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
   }
 
   async openAppSettings(): Promise<void> {
+    // No-op on web
+  }
+
+  async getPendingCallIntent(): Promise<CallIntentResult> {
+    return { hasIntent: false };
+  }
+
+  async clearPendingCallIntent(): Promise<void> {
     // No-op on web
   }
 }

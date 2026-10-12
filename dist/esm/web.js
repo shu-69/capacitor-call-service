@@ -39,5 +39,11 @@ export class CallServiceWeb extends WebPlugin {
     async openAppSettings() {
         // No-op on web
     }
+    async getPendingCallIntent() {
+        return { hasIntent: false };
+    }
+    async clearPendingCallIntent() {
+        // No-op on web
+    }
 }
 //# sourceMappingURL=web.js.map

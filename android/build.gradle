@@ -10,6 +10,11 @@ android {
         targetSdkVersion rootProject.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
         versionCode 1
         versionName "1.0"
+        buildConfigField "String", "API_BASE_URL", "\"https://api.minglo.geekbros.in/api\""
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     buildTypes {
@@ -34,6 +39,8 @@ repositories {
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':capacitor-android')
+    compileOnly project(':capacitor-push-notifications')
+    implementation "com.google.firebase:firebase-messaging:${rootProject.hasProperty('firebaseMessagingVersion') ? rootProject.ext.firebaseMessagingVersion : '25.0.1'}"
     implementation "androidx.core:core-ktx:1.12.0"
     implementation "androidx.appcompat:appcompat:${rootProject.hasProperty('androidxAppCompatVersion') ? rootProject.ext.androidxAppCompatVersion : '1.7.1'}"
 }

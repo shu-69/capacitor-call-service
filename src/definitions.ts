@@ -48,6 +48,18 @@ export interface StartAudioRoutingOptions {
   callType?: 'voice' | 'video';
 }
 
+export interface CallIntentPayload {
+  action: 'OPEN_INCOMING_CALL' | 'ACCEPT_CALL';
+  callId: string;
+  callType?: 'voice' | 'video';
+  callerName?: string;
+}
+
+export interface CallIntentResult {
+  hasIntent: boolean;
+  intent?: CallIntentPayload;
+}
+
 export interface CallServicePlugin {
   startCallService(options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
   updateCallService(options?: UpdateCallServiceOptions): Promise<void>;
@@ -61,6 +73,10 @@ export interface CallServicePlugin {
   checkBluetoothPermission(): Promise<{ granted: boolean }>;
   requestBluetoothPermission(): Promise<{ granted: boolean }>;
   openAppSettings(): Promise<void>;
+
+  // Incoming Call Launch Intent APIs
+  getPendingCallIntent(): Promise<CallIntentResult>;
+  clearPendingCallIntent(): Promise<void>;
 
   addListener(
     eventName: 'hangup_pressed',
@@ -80,6 +96,11 @@ export interface CallServicePlugin {
   addListener(
     eventName: 'audioOutputsChanged',
     listenerFunc: (result: AudioOutputsResult) => void,
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'callIntent',
+    listenerFunc: (intent: CallIntentPayload) => void,
   ): Promise<PluginListenerHandle>;
 
   removeAllListeners(): Promise<void>;

@@ -39,6 +39,16 @@ export interface SetAudioOutputOptions {
 export interface StartAudioRoutingOptions {
     callType?: 'voice' | 'video';
 }
+export interface CallIntentPayload {
+    action: 'OPEN_INCOMING_CALL' | 'ACCEPT_CALL';
+    callId: string;
+    callType?: 'voice' | 'video';
+    callerName?: string;
+}
+export interface CallIntentResult {
+    hasIntent: boolean;
+    intent?: CallIntentPayload;
+}
 export interface CallServicePlugin {
     startCallService(options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
     updateCallService(options?: UpdateCallServiceOptions): Promise<void>;
@@ -54,9 +64,12 @@ export interface CallServicePlugin {
         granted: boolean;
     }>;
     openAppSettings(): Promise<void>;
+    getPendingCallIntent(): Promise<CallIntentResult>;
+    clearPendingCallIntent(): Promise<void>;
     addListener(eventName: 'hangup_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'mute_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'speaker_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'audioOutputsChanged', listenerFunc: (result: AudioOutputsResult) => void): Promise<PluginListenerHandle>;
+    addListener(eventName: 'callIntent', listenerFunc: (intent: CallIntentPayload) => void): Promise<PluginListenerHandle>;
     removeAllListeners(): Promise<void>;
 }

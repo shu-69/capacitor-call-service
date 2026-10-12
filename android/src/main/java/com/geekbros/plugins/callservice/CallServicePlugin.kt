@@ -1,11 +1,17 @@
 package com.geekbros.plugins.callservice
 
 import android.Manifest
+import android.app.Activity
+import android.app.ActivityManager
+import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.WindowManager
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
@@ -37,6 +43,24 @@ class CallServicePlugin : Plugin() {
         private var pendingStartCall: PluginCall? = null
         private val timeoutHandler = Handler(Looper.getMainLooper())
         private var timeoutRunnable: Runnable? = null
+        @Volatile
+        private var resumedActivityCount: Int = 0
+        private var pendingCallIntent: JSObject? = null
+
+        fun isAppForeground(context: Context): Boolean {
+            if (resumedActivityCount > 0) return true
+            try {
+                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+                val processes = am.runningAppProcesses ?: return false
+                for (p in processes) {
+                    if (p.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
+                        p.processName == context.packageName) {
+                        return true
+                    }
+                }
+            } catch (_: Throwable) {}
+            return false
+        }
 
         fun onActionPressed(eventName: String) {
             staticBridge?.let { bridge ->
@@ -75,6 +99,83 @@ class CallServicePlugin : Plugin() {
         audioRouteManager.setOnOutputsChangedListener { resultData ->
             notifyListeners("audioOutputsChanged", formatOutputsResult(resultData))
         }
+
+        try {
+            activity.application?.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityResumed(act: Activity) {
+                    if (act.packageName == context.packageName) {
+                        resumedActivityCount++
+                    }
+                }
+                override fun onActivityPaused(act: Activity) {
+                    if (act.packageName == context.packageName) {
+                        resumedActivityCount = maxOf(0, resumedActivityCount - 1)
+                    }
+                }
+                override fun onActivityCreated(act: Activity, b: Bundle?) {}
+                override fun onActivityStarted(act: Activity) {}
+                override fun onActivityStopped(act: Activity) {}
+                override fun onActivitySaveInstanceState(act: Activity, outState: Bundle) {}
+                override fun onActivityDestroyed(act: Activity) {}
+            })
+            resumedActivityCount = 1
+        } catch (e: Throwable) {
+            Log.w("CallServicePlugin", "Error registering activity lifecycle callbacks: ${e.message}")
+        }
+
+        // Handle cold start intent
+        activity?.intent?.let { intent ->
+            handleIntent(intent)
+        }
+    }
+
+    override fun handleOnNewIntent(intent: Intent) {
+        super.handleOnNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent == null) return
+        val rawAction = intent.action
+        val action = when (rawAction) {
+            IncomingCallNotificationManager.ACTION_OPEN_INCOMING_CALL, "OPEN_INCOMING_CALL" -> "OPEN_INCOMING_CALL"
+            IncomingCallNotificationManager.ACTION_ACCEPT_CALL, "ACCEPT_CALL" -> "ACCEPT_CALL"
+            else -> intent.getStringExtra("action")?.takeIf { it == "OPEN_INCOMING_CALL" || it == "ACCEPT_CALL" }
+        } ?: return
+
+        val callId = intent.getStringExtra("callId") ?: return
+        val callType = intent.getStringExtra("callType") ?: "voice"
+        val callerName = intent.getStringExtra("callerName") ?: ""
+
+        val payload = JSObject().apply {
+            put("action", action)
+            put("callId", callId)
+            put("callType", callType)
+            put("callerName", callerName)
+        }
+
+        pendingCallIntent = payload
+
+        // Ensure activity wakes/shows over lockscreen when tapped or launched from call notification
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                activity.setShowWhenLocked(true)
+                activity.setTurnScreenOn(true)
+            } else {
+                @Suppress("DEPRECATION")
+                activity.window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
+        } catch (_: Throwable) {}
+
+        // Clear intent action/extras so it is not re-handled on orientation or config changes
+        intent.action = null
+        intent.removeExtra("action")
+        intent.removeExtra("callId")
+
+        notifyListeners("callIntent", payload, true)
     }
 
     override fun handleOnDestroy() {
@@ -289,5 +390,23 @@ class CallServicePlugin : Plugin() {
         val granted = audioRouteManager.hasBluetoothPermission()
         call.resolve(JSObject().apply { put("granted", granted) })
         notifyListeners("audioOutputsChanged", formatOutputsResult(audioRouteManager.getOutputsResult()))
+    }
+
+    @PluginMethod
+    fun getPendingCallIntent(call: PluginCall) {
+        val ret = JSObject()
+        if (pendingCallIntent != null) {
+            ret.put("hasIntent", true)
+            ret.put("intent", pendingCallIntent)
+        } else {
+            ret.put("hasIntent", false)
+        }
+        call.resolve(ret)
+    }
+
+    @PluginMethod
+    fun clearPendingCallIntent(call: PluginCall) {
+        pendingCallIntent = null
+        call.resolve()
     }
 }
