@@ -146,6 +146,7 @@ class CallServicePlugin : Plugin() {
         val callId = intent.getStringExtra("callId") ?: return
         val callType = intent.getStringExtra("callType") ?: "voice"
         val callerName = intent.getStringExtra("callerName") ?: ""
+        Log.d("CALLDBG", "Notification action received in handleIntent: action=$action, callId=$callId, callType=$callType")
 
         val payload = JSObject().apply {
             put("action", action)
@@ -216,6 +217,8 @@ class CallServicePlugin : Plugin() {
         val durationSeconds = call.getInt("durationSeconds", 0)
         val isMuted = call.getBoolean("isMuted", false)
         val isSpeakerOn = call.getBoolean("isSpeakerOn", false)
+        val callId = call.getString("callId", "unknown")
+        Log.d("CALLDBG", "startCallService entry: callId=$callId, callType=$callType")
 
         try {
             pendingStartCall = call
@@ -297,7 +300,21 @@ class CallServicePlugin : Plugin() {
 
     @PluginMethod
     fun stopCallService(call: PluginCall) {
+        val callId = call.getString("callId", "unknown")
+        Log.d("CALLDBG", "stopCallService entry: callId=$callId")
         try {
+            if (::audioRouteManager.isInitialized) {
+                audioRouteManager.stopAudioRouting()
+            }
+            val intent = Intent(context, CallForegroundService::class.java).apply {
+                action = CallForegroundService.ACTION_STOP
+            }
+            context.startService(intent)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Failed to stop CallForegroundService: ${e.message}", e)
+        }
+    }
             if (::audioRouteManager.isInitialized) {
                 audioRouteManager.stopAudioRouting()
             }

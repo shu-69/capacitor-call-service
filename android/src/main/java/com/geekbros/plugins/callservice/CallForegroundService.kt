@@ -62,6 +62,8 @@ class CallForegroundService : Service() {
 
         when (intent.action) {
             ACTION_STOP -> {
+                val callId = intent.getStringExtra("callId") ?: intent.extras?.getString("callId") ?: "unknown"
+                Log.d("CALLDBG", "CallForegroundService ACTION_STOP entry: callId=$callId")
                 isForegroundActive = false
                 try {
                     stopForeground(true)
@@ -73,6 +75,7 @@ class CallForegroundService : Service() {
             }
             ACTION_START, ACTION_UPDATE -> {
                 val extras = intent.extras ?: Bundle()
+                val callId = extras.getString("callId") ?: extras.getString(EXTRA_TITLE) ?: "unknown"
                 val title = extras.getString(EXTRA_TITLE, "Minglo Call")
                 val body = extras.getString(EXTRA_BODY, "Active call")
                 val partnerName = extras.getString(EXTRA_PARTNER_NAME, "Minglo User")
@@ -80,6 +83,8 @@ class CallForegroundService : Service() {
                 val callType = extras.getString(EXTRA_CALL_TYPE, "voice")
                 val isMuted = extras.getBoolean(EXTRA_IS_MUTED, false)
                 val isSpeakerOn = extras.getBoolean(EXTRA_IS_SPEAKER_ON, false)
+
+                Log.d("CALLDBG", "CallForegroundService ${intent.action} entry: callId=$callId, callType=$callType")
 
                 createNotificationChannel()
                 fetchPhotoIfNeeded(partnerPhoto, title, body, partnerName, callType, isMuted, isSpeakerOn)

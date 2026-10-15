@@ -25,6 +25,7 @@ class CallActionReceiver : BroadcastReceiver() {
         val notificationId = intent.getIntExtra("notificationId", IncomingCallNotificationManager.getNotificationId(callId))
 
         Log.d(TAG, "Notification Reject action received for callId=$callId")
+        Log.d("CALLDBG", "Notification Decline/Reject action received: callId=$callId")
 
         val pendingResult = goAsync()
 

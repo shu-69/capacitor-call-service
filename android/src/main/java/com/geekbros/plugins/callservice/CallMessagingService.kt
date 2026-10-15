@@ -27,8 +27,10 @@ class CallMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(remoteMessage)
         val data = remoteMessage.data
         val type = data["type"]
+        val callId = data["callId"] ?: "unknown"
 
         Log.d(TAG, "FCM message received: type=$type, messageId=${remoteMessage.messageId}")
+        Log.d("CALLDBG", "FCM onMessageReceived: type=$type, callId=$callId, messageId=${remoteMessage.messageId}")
 
         when (type) {
             "incoming_call" -> {
@@ -47,6 +49,7 @@ class CallMessagingService : FirebaseMessagingService() {
     private fun handleIncomingCall(remoteMessage: RemoteMessage) {
         val data = remoteMessage.data
         val callId = data["callId"]
+        Log.d("CALLDBG", "handleIncomingCall entry: callId=$callId, callType=${data["callType"]}, foreground=${CallServicePlugin.isAppForeground(this)}")
         if (callId.isNullOrBlank()) {
             Log.w(TAG, "incoming_call push received without callId. Delegating to Capacitor.")
             delegateToCapacitorPush(remoteMessage)
@@ -81,6 +84,7 @@ class CallMessagingService : FirebaseMessagingService() {
     private fun handleCallCancelled(remoteMessage: RemoteMessage) {
         val data = remoteMessage.data
         val callId = data["callId"]
+        Log.d("CALLDBG", "handleCallCancelled entry: callId=$callId")
         if (!callId.isNullOrBlank()) {
             Log.d(TAG, "call_cancelled push received. Cancelling notification for callId=$callId")
             IncomingCallNotificationManager.cancelIncomingCall(this, callId)
