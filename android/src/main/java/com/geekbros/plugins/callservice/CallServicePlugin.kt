@@ -315,18 +315,6 @@ class CallServicePlugin : Plugin() {
             call.reject("Failed to stop CallForegroundService: ${e.message}", e)
         }
     }
-            if (::audioRouteManager.isInitialized) {
-                audioRouteManager.stopAudioRouting()
-            }
-            val intent = Intent(context, CallForegroundService::class.java).apply {
-                action = CallForegroundService.ACTION_STOP
-            }
-            context.startService(intent)
-            call.resolve()
-        } catch (e: Exception) {
-            call.reject("Failed to stop CallForegroundService: ${e.message}", e)
-        }
-    }
 
     // --- Audio Routing Plugin Methods ---
 
