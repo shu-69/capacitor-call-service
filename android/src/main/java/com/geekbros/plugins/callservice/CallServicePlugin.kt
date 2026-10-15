@@ -148,6 +148,9 @@ class CallServicePlugin : Plugin() {
         val callerName = intent.getStringExtra("callerName") ?: ""
         Log.d("CALLDBG", "Notification action received in handleIntent: action=$action, callId=$callId, callType=$callType")
 
+        // Dismiss the native incoming ringing notification and stop ringtone immediately
+        IncomingCallNotificationManager.cancelIncomingCall(context, callId)
+
         val payload = JSObject().apply {
             put("action", action)
             put("callId", callId)
