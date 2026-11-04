@@ -4,6 +4,9 @@ import type {
   StartCallServiceOptions,
   StartCallServiceResult,
   UpdateCallServiceOptions,
+  StartAvailabilityServiceOptions,
+  StartAvailabilityServiceResult,
+  UpdateAvailabilityServiceOptions,
   AudioOutputsResult,
   SetAudioOutputOptions,
   StartAudioRoutingOptions,
@@ -22,6 +25,18 @@ export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
 
   async stopCallService(): Promise<void> {
     console.warn('CallService foreground service is not supported on web platform.');
+  }
+
+  async startAvailabilityService(_options?: StartAvailabilityServiceOptions): Promise<StartAvailabilityServiceResult> {
+    return { started: false };
+  }
+
+  async updateAvailabilityNotification(_options?: UpdateAvailabilityServiceOptions): Promise<void> {
+    // No-op on web
+  }
+
+  async stopAvailabilityService(): Promise<void> {
+    // No-op on web
   }
 
   async getAudioOutputs(): Promise<AudioOutputsResult> {

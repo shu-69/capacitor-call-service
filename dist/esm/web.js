@@ -10,6 +10,15 @@ export class CallServiceWeb extends WebPlugin {
     async stopCallService() {
         console.warn('CallService foreground service is not supported on web platform.');
     }
+    async startAvailabilityService(_options) {
+        return { started: false };
+    }
+    async updateAvailabilityNotification(_options) {
+        // No-op on web
+    }
+    async stopAvailabilityService() {
+        // No-op on web
+    }
     async getAudioOutputs() {
         return {
             available: [{ type: 'speaker', name: 'Speaker' }],

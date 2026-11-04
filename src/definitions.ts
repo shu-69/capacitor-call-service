@@ -27,6 +27,19 @@ export interface StartCallServiceResult {
   error?: string;
 }
 
+export interface StartAvailabilityServiceOptions {
+  showDetailed?: boolean;
+}
+
+export interface UpdateAvailabilityServiceOptions {
+  showDetailed?: boolean;
+}
+
+export interface StartAvailabilityServiceResult {
+  started: boolean;
+  error?: string;
+}
+
 export type AudioOutputType = 'earpiece' | 'speaker' | 'wired_headset' | 'bluetooth';
 
 export interface AudioOutputDevice {
@@ -64,6 +77,11 @@ export interface CallServicePlugin {
   startCallService(options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
   updateCallService(options?: UpdateCallServiceOptions): Promise<void>;
   stopCallService(): Promise<void>;
+
+  // Host Availability Foreground Service APIs
+  startAvailabilityService(options?: StartAvailabilityServiceOptions): Promise<StartAvailabilityServiceResult>;
+  updateAvailabilityNotification(options?: UpdateAvailabilityServiceOptions): Promise<void>;
+  stopAvailabilityService(): Promise<void>;
 
   // Audio Routing APIs
   getAudioOutputs(): Promise<AudioOutputsResult>;

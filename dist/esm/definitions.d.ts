@@ -23,6 +23,16 @@ export interface StartCallServiceResult {
     grantedType?: 'mic-only' | 'mic+camera' | 'none';
     error?: string;
 }
+export interface StartAvailabilityServiceOptions {
+    showDetailed?: boolean;
+}
+export interface UpdateAvailabilityServiceOptions {
+    showDetailed?: boolean;
+}
+export interface StartAvailabilityServiceResult {
+    started: boolean;
+    error?: string;
+}
 export type AudioOutputType = 'earpiece' | 'speaker' | 'wired_headset' | 'bluetooth';
 export interface AudioOutputDevice {
     type: AudioOutputType;
@@ -53,6 +63,9 @@ export interface CallServicePlugin {
     startCallService(options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
     updateCallService(options?: UpdateCallServiceOptions): Promise<void>;
     stopCallService(): Promise<void>;
+    startAvailabilityService(options?: StartAvailabilityServiceOptions): Promise<StartAvailabilityServiceResult>;
+    updateAvailabilityNotification(options?: UpdateAvailabilityServiceOptions): Promise<void>;
+    stopAvailabilityService(): Promise<void>;
     getAudioOutputs(): Promise<AudioOutputsResult>;
     setAudioOutput(options: SetAudioOutputOptions): Promise<void>;
     startAudioRouting(options?: StartAudioRoutingOptions): Promise<AudioOutputsResult>;

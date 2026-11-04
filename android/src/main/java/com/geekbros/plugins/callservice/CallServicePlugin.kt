@@ -319,6 +319,73 @@ class CallServicePlugin : Plugin() {
         }
     }
 
+    // --- Host Availability Foreground Service Methods ---
+
+    @PluginMethod
+    fun startAvailabilityService(call: PluginCall) {
+        if (!isAppForeground(context)) {
+            Log.w("CallServicePlugin", "startAvailabilityService rejected: App is not in foreground")
+            val ret = JSObject().apply {
+                put("started", false)
+                put("error", "App is not in foreground")
+            }
+            call.resolve(ret)
+            return
+        }
+
+        val showDetailed = call.getBoolean("showDetailed", true) ?: true
+        try {
+            val intent = Intent(context, HostAvailabilityService::class.java).apply {
+                action = HostAvailabilityService.ACTION_START
+                putExtra(HostAvailabilityService.EXTRA_SHOW_DETAILED, showDetailed)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            val ret = JSObject().apply {
+                put("started", true)
+            }
+            call.resolve(ret)
+        } catch (e: Exception) {
+            Log.e("CallServicePlugin", "Failed to start HostAvailabilityService: ${e.message}", e)
+            val ret = JSObject().apply {
+                put("started", false)
+                put("error", e.message ?: "Failed to start HostAvailabilityService")
+            }
+            call.resolve(ret)
+        }
+    }
+
+    @PluginMethod
+    fun updateAvailabilityNotification(call: PluginCall) {
+        val showDetailed = call.getBoolean("showDetailed", true) ?: true
+        try {
+            val intent = Intent(context, HostAvailabilityService::class.java).apply {
+                action = HostAvailabilityService.ACTION_UPDATE
+                putExtra(HostAvailabilityService.EXTRA_SHOW_DETAILED, showDetailed)
+            }
+            context.startService(intent)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Failed to update HostAvailabilityService: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun stopAvailabilityService(call: PluginCall) {
+        try {
+            val intent = Intent(context, HostAvailabilityService::class.java).apply {
+                action = HostAvailabilityService.ACTION_STOP
+            }
+            context.startService(intent)
+            call.resolve()
+        } catch (e: Exception) {
+            call.reject("Failed to stop HostAvailabilityService: ${e.message}", e)
+        }
+    }
+
     // --- Audio Routing Plugin Methods ---
 
     @PluginMethod
