@@ -140,7 +140,10 @@ class CallServicePlugin : Plugin() {
         val action = when (rawAction) {
             IncomingCallNotificationManager.ACTION_OPEN_INCOMING_CALL, "OPEN_INCOMING_CALL" -> "OPEN_INCOMING_CALL"
             IncomingCallNotificationManager.ACTION_ACCEPT_CALL, "ACCEPT_CALL" -> "ACCEPT_CALL"
-            else -> intent.getStringExtra("action")?.takeIf { it == "OPEN_INCOMING_CALL" || it == "ACCEPT_CALL" }
+            IncomingCallNotificationManager.ACTION_OPEN_MISSED_CALL, "OPEN_MISSED_CALL" -> "OPEN_MISSED_CALL"
+            else -> intent.getStringExtra("action")?.takeIf {
+                it == "OPEN_INCOMING_CALL" || it == "ACCEPT_CALL" || it == "OPEN_MISSED_CALL"
+            }
         } ?: return
 
         val callId = intent.getStringExtra("callId") ?: return
@@ -150,6 +153,14 @@ class CallServicePlugin : Plugin() {
 
         // Dismiss the native incoming ringing notification and stop ringtone immediately
         IncomingCallNotificationManager.cancelIncomingCall(context, callId)
+
+        // If user tapped a missed call notification, clear it from tray
+        if (action == "OPEN_MISSED_CALL") {
+            try {
+                androidx.core.app.NotificationManagerCompat.from(context)
+                    .cancel(IncomingCallNotificationManager.getMissedCallNotificationId(callId))
+            } catch (_: Throwable) {}
+        }
 
         val payload = JSObject().apply {
             put("action", action)

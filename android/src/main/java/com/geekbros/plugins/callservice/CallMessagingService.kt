@@ -46,6 +46,9 @@ class CallMessagingService : FirebaseMessagingService() {
             "call_cancelled" -> {
                 handleCallCancelled(remoteMessage)
             }
+            "missed_call" -> {
+                handleMissedCall(remoteMessage)
+            }
             "auto_offline" -> {
                 handleAutoOffline(remoteMessage)
             }
@@ -156,6 +159,36 @@ class CallMessagingService : FirebaseMessagingService() {
             callerPhoto = callerPhoto,
             rejectToken = rejectToken,
             expiresAt = expiresAt
+        )
+    }
+
+    private fun handleMissedCall(remoteMessage: RemoteMessage) {
+        val data = remoteMessage.data
+        val callId = data["callId"] ?: "unknown"
+        val callType = data["callType"] ?: "voice"
+        val callerName = data["callerName"] ?: "Caller"
+        Log.d("CALLDBG", "handleMissedCall entry: callId=$callId, callerName=$callerName, callType=$callType, foreground=${CallServicePlugin.isAppForeground(this)}")
+
+        // 1. Cancel the ringing notification and stop ringtone
+        if (callId != "unknown") {
+            IncomingCallNotificationManager.cancelIncomingCall(this, callId)
+        }
+
+        // 2. Forward to Capacitor push plugin
+        delegateToCapacitorPush(remoteMessage)
+
+        // 3. Skip posting system tray notification if app is actively in foreground
+        if (CallServicePlugin.isAppForeground(this)) {
+            Log.d(TAG, "App is in foreground. Suppressing missed_call system notification.")
+            return
+        }
+
+        // 4. Post missed call notification
+        IncomingCallNotificationManager.showMissedCallNotification(
+            context = this,
+            callId = callId,
+            callType = callType,
+            callerName = callerName
         )
     }
 

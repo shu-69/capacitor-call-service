@@ -22,8 +22,10 @@ object IncomingCallNotificationManager {
 
     private const val TAG = "IncomingCallNotif"
     const val CHANNEL_ID = "incoming_calls"
+    const val MISSED_CALLS_CHANNEL_ID = "missed_calls"
     const val ACTION_OPEN_INCOMING_CALL = "com.geekbros.plugins.callservice.OPEN_INCOMING_CALL"
     const val ACTION_ACCEPT_CALL = "com.geekbros.plugins.callservice.ACCEPT_CALL"
+    const val ACTION_OPEN_MISSED_CALL = "com.geekbros.plugins.callservice.OPEN_MISSED_CALL"
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val activeAutoDismissRunnables = ConcurrentHashMap<String, Runnable>()
@@ -50,6 +52,26 @@ object IncomingCallNotificationManager {
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 1000, 1000, 1000, 1000)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
+                setShowBadge(true)
+            }
+
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.createNotificationChannel(channel)
+        }
+    }
+
+    /**
+     * Creates or updates the dedicated Missed Calls notification channel.
+     */
+    fun createMissedCallNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                MISSED_CALLS_CHANNEL_ID,
+                "Missed Calls",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Notifications for missed voice and video calls"
+                enableVibration(true)
                 setShowBadge(true)
             }
 
@@ -137,6 +159,7 @@ object IncomingCallNotificationManager {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setAutoCancel(false)
+            .setTimeoutAfter(30000L)
             .setContentIntent(openPendingIntent)
 
         // Full-screen intent with Android 14 permission check
@@ -249,6 +272,69 @@ object IncomingCallNotificationManager {
 
     fun getNotificationId(callId: String): Int {
         return kotlin.math.abs(callId.hashCode())
+    }
+
+    fun getMissedCallNotificationId(callId: String): Int {
+        return kotlin.math.abs(callId.hashCode()) + 10000
+    }
+
+    /**
+     * Posts a missed-call notification on the dedicated missed_calls channel.
+     * Tapping opens the app and routes to the call log.
+     */
+    fun showMissedCallNotification(
+        context: Context,
+        callId: String,
+        callType: String,
+        callerName: String
+    ) {
+        createMissedCallNotificationChannel(context)
+
+        val notificationId = getMissedCallNotificationId(callId)
+        val mainActivityClass = getMainActivityClass(context)
+
+        val openIntent = Intent(context, mainActivityClass).apply {
+            action = ACTION_OPEN_MISSED_CALL
+            putExtra("action", "OPEN_MISSED_CALL")
+            putExtra("type", "missed_call")
+            putExtra("callId", callId)
+            putExtra("callType", callType)
+            putExtra("callerName", callerName)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId,
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val isVideo = callType.equals("video", ignoreCase = true)
+        val titleText = "Missed call"
+        val displayName = callerName.ifBlank { "User" }
+        val bodyText = if (isVideo) "Missed video call from $displayName" else "Missed voice call from $displayName"
+
+        val smallIcon = getNotificationIcon(context)
+
+        val builder = NotificationCompat.Builder(context, MISSED_CALLS_CHANNEL_ID)
+            .setSmallIcon(smallIcon)
+            .setContentTitle(titleText)
+            .setContentText(bodyText)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setContentIntent(contentPendingIntent)
+
+        try {
+            val notification = builder.build()
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
+            Log.d(TAG, "Missed call notification posted for callId=$callId (id=$notificationId)")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "POST_NOTIFICATIONS permission not granted for missed call: ${e.message}")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to display missed call notification: ${e.message}", e)
+        }
     }
 
     private fun getNotificationIcon(context: Context): Int {

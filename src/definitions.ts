@@ -62,7 +62,7 @@ export interface StartAudioRoutingOptions {
 }
 
 export interface CallIntentPayload {
-  action: 'OPEN_INCOMING_CALL' | 'ACCEPT_CALL';
+  action: 'OPEN_INCOMING_CALL' | 'ACCEPT_CALL' | 'OPEN_MISSED_CALL';
   callId: string;
   callType?: 'voice' | 'video';
   callerName?: string;
