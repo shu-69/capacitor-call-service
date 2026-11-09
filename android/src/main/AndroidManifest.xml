@@ -51,5 +51,17 @@
         <receiver
             android:name="com.geekbros.plugins.callservice.CallActionReceiver"
             android:exported="false" />
+
+        <!-- Native Incoming Call Activity displayed over Lockscreen and App -->
+        <activity
+            android:name="com.geekbros.plugins.callservice.IncomingCallActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.CallService.IncomingCall"
+            android:screenOrientation="portrait" />
     </application>
 </manifest>

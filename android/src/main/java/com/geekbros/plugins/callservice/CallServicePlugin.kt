@@ -39,27 +39,55 @@ class CallServicePlugin : Plugin() {
     private lateinit var audioRouteManager: AudioRouteManager
 
     companion object {
+        private const val TAG = "CallServicePlugin"
         private var staticBridge: Bridge? = null
         private var pendingStartCall: PluginCall? = null
         private val timeoutHandler = Handler(Looper.getMainLooper())
         private var timeoutRunnable: Runnable? = null
+        private val resumedActivities = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<Activity, Boolean>())
         @Volatile
-        private var resumedActivityCount: Int = 0
+        private var isCallbacksRegistered = false
         private var pendingCallIntent: JSObject? = null
 
-        fun isAppForeground(context: Context): Boolean {
-            if (resumedActivityCount > 0) return true
-            try {
-                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
-                val processes = am.runningAppProcesses ?: return false
-                for (p in processes) {
-                    if (p.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
-                        p.processName == context.packageName) {
-                        return true
+        fun registerLifecycleCallbacks(application: Application) {
+            if (isCallbacksRegistered) return
+            synchronized(this) {
+                if (isCallbacksRegistered) return
+                isCallbacksRegistered = true
+                application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+                    override fun onActivityResumed(act: Activity) {
+                        if (act.packageName == application.packageName) {
+                            resumedActivities.add(act)
+                        }
                     }
-                }
-            } catch (_: Throwable) {}
-            return false
+                    override fun onActivityPaused(act: Activity) {
+                        if (act.packageName == application.packageName) {
+                            resumedActivities.remove(act)
+                        }
+                    }
+                    override fun onActivityDestroyed(act: Activity) {
+                        if (act.packageName == application.packageName) {
+                            resumedActivities.remove(act)
+                        }
+                    }
+                    override fun onActivityCreated(act: Activity, b: Bundle?) {}
+                    override fun onActivityStarted(act: Activity) {}
+                    override fun onActivityStopped(act: Activity) {}
+                    override fun onActivitySaveInstanceState(act: Activity, outState: Bundle) {}
+                })
+            }
+        }
+
+        fun getResumedActivityCount(): Int {
+            return resumedActivities.count { !it.isFinishing && !it.isDestroyed }
+        }
+
+        fun isAppForeground(context: Context): Boolean {
+            (context.applicationContext as? Application)?.let { registerLifecycleCallbacks(it) }
+            // An app is considered in foreground ONLY if an actual Activity of this app is currently resumed and visible.
+            // Foreground services (HostAvailabilityService / CallForegroundService) do NOT count as foreground.
+            // In a fresh or killed process, resumedActivities is empty -> returns false.
+            return getResumedActivityCount() > 0
         }
 
         fun onActionPressed(eventName: String) {
@@ -101,24 +129,9 @@ class CallServicePlugin : Plugin() {
         }
 
         try {
-            activity.application?.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-                override fun onActivityResumed(act: Activity) {
-                    if (act.packageName == context.packageName) {
-                        resumedActivityCount++
-                    }
-                }
-                override fun onActivityPaused(act: Activity) {
-                    if (act.packageName == context.packageName) {
-                        resumedActivityCount = maxOf(0, resumedActivityCount - 1)
-                    }
-                }
-                override fun onActivityCreated(act: Activity, b: Bundle?) {}
-                override fun onActivityStarted(act: Activity) {}
-                override fun onActivityStopped(act: Activity) {}
-                override fun onActivitySaveInstanceState(act: Activity, outState: Bundle) {}
-                override fun onActivityDestroyed(act: Activity) {}
-            })
-            resumedActivityCount = 1
+            (activity?.application ?: (context.applicationContext as? Application))?.let { app ->
+                registerLifecycleCallbacks(app)
+            }
         } catch (e: Throwable) {
             Log.w("CallServicePlugin", "Error registering activity lifecycle callbacks: ${e.message}")
         }

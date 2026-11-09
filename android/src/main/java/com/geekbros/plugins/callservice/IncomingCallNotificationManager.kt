@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap
 object IncomingCallNotificationManager {
 
     private const val TAG = "IncomingCallNotif"
-    const val CHANNEL_ID = "incoming_calls"
+    const val CHANNEL_ID = "incoming_calls_v2"
     const val MISSED_CALLS_CHANNEL_ID = "missed_calls"
     const val ACTION_OPEN_INCOMING_CALL = "com.geekbros.plugins.callservice.OPEN_INCOMING_CALL"
     const val ACTION_ACCEPT_CALL = "com.geekbros.plugins.callservice.ACCEPT_CALL"
@@ -29,18 +29,21 @@ object IncomingCallNotificationManager {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val activeAutoDismissRunnables = ConcurrentHashMap<String, Runnable>()
-    private var activeRingtone: Ringtone? = null
 
     /**
      * Creates or updates the dedicated high-priority Incoming Calls notification channel.
+     * Notification sound is muted in this channel because RingtonePlayer natively plays
+     * the looping ringtone to prevent double sound.
      */
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            val audioAttributes = AudioAttributes.Builder()
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                .build()
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+
+            // Delete legacy channels so previous ringtone sound settings do not echo
+            try {
+                nm?.deleteNotificationChannel("incoming_calls")
+                nm?.deleteNotificationChannel("incoming_calls_channel")
+            } catch (_: Throwable) {}
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -48,14 +51,12 @@ object IncomingCallNotificationManager {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notifications for incoming voice and video calls"
-                setSound(ringtoneUri, audioAttributes)
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 1000, 1000, 1000, 1000)
+                setSound(null, null)
+                enableVibration(false)
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
                 setShowBadge(true)
             }
 
-            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             nm?.createNotificationChannel(channel)
         }
     }
@@ -97,23 +98,26 @@ object IncomingCallNotificationManager {
         val notificationId = getNotificationId(callId)
         val mainActivityClass = getMainActivityClass(context)
 
-        // 1. PendingIntent for body tap -> OPEN_INCOMING_CALL
-        val openIntent = Intent(context, mainActivityClass).apply {
+        // 1. PendingIntent for body tap and full-screen intent -> IncomingCallActivity
+        val incomingCallIntent = Intent(context, IncomingCallActivity::class.java).apply {
             action = ACTION_OPEN_INCOMING_CALL
             putExtra("action", "OPEN_INCOMING_CALL")
             putExtra("callId", callId)
             putExtra("callType", callType)
             putExtra("callerName", callerName)
+            putExtra("callerPhoto", callerPhoto)
+            putExtra("rejectToken", rejectToken)
+            putExtra("expiresAt", expiresAt)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
-        val openPendingIntent = PendingIntent.getActivity(
+        val fullScreenPendingIntent = PendingIntent.getActivity(
             context,
             notificationId,
-            openIntent,
+            incomingCallIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 2. PendingIntent for Accept button -> ACCEPT_CALL
+        // 2. PendingIntent for Accept button -> ACCEPT_CALL on MainActivity
         val acceptIntent = Intent(context, mainActivityClass).apply {
             action = ACTION_ACCEPT_CALL
             putExtra("action", "ACCEPT_CALL")
@@ -160,17 +164,21 @@ object IncomingCallNotificationManager {
             .setOngoing(true)
             .setAutoCancel(false)
             .setTimeoutAfter(30000L)
-            .setContentIntent(openPendingIntent)
+            .setContentIntent(fullScreenPendingIntent)
 
         // Full-screen intent with Android 14 permission check
         val canUseFullScreen = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val nm = context.getSystemService(NotificationManager::class.java)
-            nm?.canUseFullScreenIntent() ?: true
+            val allowed = nm?.canUseFullScreenIntent() ?: true
+            if (!allowed) {
+                Log.w(TAG, "canUseFullScreenIntent is false on Android 14+. Falling back to heads-up notification.")
+            }
+            allowed
         } else {
             true
         }
         if (canUseFullScreen) {
-            builder.setFullScreenIntent(openPendingIntent, true)
+            builder.setFullScreenIntent(fullScreenPendingIntent, true)
         }
 
         // Notification.CallStyle on API 31+ vs action buttons below 31
@@ -224,7 +232,8 @@ object IncomingCallNotificationManager {
             }
 
             NotificationManagerCompat.from(context).cancel(notificationId)
-            stopRingtone()
+            RingtonePlayer.stop()
+            IncomingCallActivity.dismiss(callId)
             Log.d(TAG, "Incoming call notification cancelled for callId=$callId (id=$notificationId)")
         } catch (e: Throwable) {
             Log.e(TAG, "Error cancelling notification for callId=$callId: ${e.message}", e)
@@ -257,6 +266,8 @@ object IncomingCallNotificationManager {
         val autoDismissRunnable = Runnable {
             Log.d(TAG, "Auto-dismiss timer expired for callId=$callId")
             cancelIncomingCall(context, callId, notificationId)
+            RingtonePlayer.stop()
+            IncomingCallActivity.dismiss(callId)
         }
 
         activeAutoDismissRunnables[callId] = autoDismissRunnable
@@ -264,10 +275,7 @@ object IncomingCallNotificationManager {
     }
 
     fun stopRingtone() {
-        try {
-            activeRingtone?.stop()
-        } catch (_: Throwable) {}
-        activeRingtone = null
+        RingtonePlayer.stop()
     }
 
     fun getNotificationId(callId: String): Int {

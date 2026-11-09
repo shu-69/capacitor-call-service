@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import java.time.Instant
 
 class CallMessagingService : FirebaseMessagingService() {
 
@@ -130,15 +131,36 @@ class CallMessagingService : FirebaseMessagingService() {
     private fun handleIncomingCall(remoteMessage: RemoteMessage) {
         val data = remoteMessage.data
         val callId = data["callId"]
-        Log.d("CALLDBG", "handleIncomingCall entry: callId=$callId, callType=${data["callType"]}, foreground=${CallServicePlugin.isAppForeground(this)}")
+        val isForeground = CallServicePlugin.isAppForeground(this)
+
+        Log.d("CALLDBG", "handleIncomingCall entry: callId=$callId, callType=${data["callType"]}, foreground=$isForeground")
         if (callId.isNullOrBlank()) {
             Log.w(TAG, "incoming_call push received without callId. Delegating to Capacitor.")
             delegateToCapacitorPush(remoteMessage)
             return
         }
 
-        // Suppress native notification when app is in foreground (Socket.IO modal handles it)
-        if (CallServicePlugin.isAppForeground(this)) {
+        // Stale push guard: If expiresAt has already elapsed by more than 3s, drop it
+        val expiresAt = data["expiresAt"]
+        if (!expiresAt.isNullOrBlank()) {
+            try {
+                val expiresAtMs = if (expiresAt.contains("T")) {
+                    Instant.parse(expiresAt).toEpochMilli()
+                } else {
+                    expiresAt.toLong()
+                }
+                val now = System.currentTimeMillis()
+                if (now > expiresAtMs + 3000L) {
+                    Log.w(TAG, "Dropping stale incoming_call push for callId=$callId: expired at $expiresAt (now=$now, skew margin=3000ms)")
+                    return
+                }
+            } catch (e: Throwable) {
+                Log.w(TAG, "Failed to parse expiresAt='$expiresAt': ${e.message}")
+            }
+        }
+
+        // Suppress native notification when app is in foreground (Socket.IO in-app modal handles it)
+        if (isForeground) {
             Log.d(TAG, "App is in foreground. Suppressing native notification for callId=$callId.")
             delegateToCapacitorPush(remoteMessage)
             return
@@ -148,9 +170,8 @@ class CallMessagingService : FirebaseMessagingService() {
         val callerName = data["callerName"] ?: data["userName"] ?: "Incoming Call"
         val callerPhoto = data["callerPhoto"] ?: data["userPhoto"]
         val rejectToken = data["rejectToken"] ?: ""
-        val expiresAt = data["expiresAt"]
 
-        Log.d(TAG, "Displaying native CallStyle incoming call notification for callId=$callId")
+        Log.d(TAG, "Displaying native incoming call notification and launching IncomingCallActivity for callId=$callId")
         IncomingCallNotificationManager.showIncomingCallNotification(
             context = this,
             callId = callId,
@@ -160,6 +181,24 @@ class CallMessagingService : FirebaseMessagingService() {
             rejectToken = rejectToken,
             expiresAt = expiresAt
         )
+
+        // Attempt direct launch of IncomingCallActivity over the lockscreen/app
+        try {
+            val activityIntent = Intent(this, IncomingCallActivity::class.java).apply {
+                action = IncomingCallNotificationManager.ACTION_OPEN_INCOMING_CALL
+                putExtra("action", "OPEN_INCOMING_CALL")
+                putExtra("callId", callId)
+                putExtra("callType", callType)
+                putExtra("callerName", callerName)
+                putExtra("callerPhoto", callerPhoto)
+                putExtra("rejectToken", rejectToken)
+                putExtra("expiresAt", expiresAt)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            startActivity(activityIntent)
+        } catch (e: Throwable) {
+            Log.d(TAG, "Direct startActivity deferred to full-screen intent: ${e.message}")
+        }
     }
 
     private fun handleMissedCall(remoteMessage: RemoteMessage) {
@@ -169,10 +208,12 @@ class CallMessagingService : FirebaseMessagingService() {
         val callerName = data["callerName"] ?: "Caller"
         Log.d("CALLDBG", "handleMissedCall entry: callId=$callId, callerName=$callerName, callType=$callType, foreground=${CallServicePlugin.isAppForeground(this)}")
 
-        // 1. Cancel the ringing notification and stop ringtone
+        // 1. Cancel the ringing notification, stop ringtone, and dismiss IncomingCallActivity
         if (callId != "unknown") {
             IncomingCallNotificationManager.cancelIncomingCall(this, callId)
         }
+        RingtonePlayer.stop()
+        IncomingCallActivity.dismiss(if (callId != "unknown") callId else null)
 
         // 2. Forward to Capacitor push plugin
         delegateToCapacitorPush(remoteMessage)
@@ -199,7 +240,9 @@ class CallMessagingService : FirebaseMessagingService() {
         if (!callId.isNullOrBlank()) {
             Log.d(TAG, "call_cancelled push received. Cancelling notification for callId=$callId")
             IncomingCallNotificationManager.cancelIncomingCall(this, callId)
+            IncomingCallActivity.dismiss(callId)
         }
+        RingtonePlayer.stop()
         // Always forward call_cancelled to Capacitor push plugin so JS listener can dismiss incoming modal
         delegateToCapacitorPush(remoteMessage)
     }

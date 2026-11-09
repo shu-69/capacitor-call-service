@@ -15,6 +15,67 @@ class CallActionReceiver : BroadcastReceiver() {
         const val ACTION_REJECT_CALL = "com.geekbros.plugins.callservice.ACTION_REJECT_CALL"
         private const val TAG = "CallActionReceiver"
         private val executor = Executors.newSingleThreadExecutor()
+
+        fun rejectCall(context: Context, callId: String, rejectToken: String, notificationId: Int = IncomingCallNotificationManager.getNotificationId(callId)) {
+            Log.d("CALLDBG", "CallActionReceiver.rejectCall triggered: callId=$callId")
+            IncomingCallNotificationManager.cancelIncomingCall(context, callId, notificationId)
+            RingtonePlayer.stop()
+            IncomingCallActivity.dismiss(callId)
+            executor.execute {
+                executeRejectCall(callId, rejectToken)
+            }
+        }
+
+        fun executeRejectCall(callId: String, rejectToken: String) {
+            val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+            val urlString = "$baseUrl/calls/$callId/reject"
+
+            var attempts = 0
+            val maxAttempts = 2 // 1 initial attempt + 1 retry on network failure
+
+            while (attempts < maxAttempts) {
+                attempts++
+                var conn: HttpURLConnection? = null
+                try {
+                    val url = URL(urlString)
+                    conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        connectTimeout = 5000
+                        readTimeout = 5000
+                        doOutput = true
+                        setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+                        setRequestProperty("Authorization", "Bearer $rejectToken")
+                    }
+
+                    val body = "{\"rejectToken\":\"$rejectToken\"}"
+                    conn.outputStream.use { os ->
+                        os.write(body.toByteArray(Charsets.UTF_8))
+                        os.flush()
+                    }
+
+                    val responseCode = conn.responseCode
+                    Log.d(TAG, "Reject call response code=$responseCode for callId=$callId (attempt $attempts)")
+                    // Terminate on any response (success 200 or 4xx rejection)
+                    if (responseCode in 200..499) {
+                        break
+                    }
+                } catch (e: IOException) {
+                    Log.w(TAG, "Network failure rejecting call $callId (attempt $attempts): ${e.message}")
+                    if (attempts < maxAttempts) {
+                        try {
+                            Thread.sleep(500)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
+                    }
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Unexpected error rejecting call $callId: ${e.message}", e)
+                    break
+                } finally {
+                    conn?.disconnect()
+                }
+            }
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent?) {
@@ -31,6 +92,8 @@ class CallActionReceiver : BroadcastReceiver() {
 
         // 1. Immediately cancel the notification and stop ringtone
         IncomingCallNotificationManager.cancelIncomingCall(context, callId, notificationId)
+        RingtonePlayer.stop()
+        IncomingCallActivity.dismiss(callId)
 
         // 2. Perform background HTTP POST /api/calls/:id/reject on background thread
         executor.execute {
@@ -38,57 +101,6 @@ class CallActionReceiver : BroadcastReceiver() {
                 executeRejectCall(callId, rejectToken)
             } finally {
                 pendingResult.finish()
-            }
-        }
-    }
-
-    private fun executeRejectCall(callId: String, rejectToken: String) {
-        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
-        val urlString = "$baseUrl/calls/$callId/reject"
-
-        var attempts = 0
-        val maxAttempts = 2 // 1 initial attempt + 1 retry on network failure
-
-        while (attempts < maxAttempts) {
-            attempts++
-            var conn: HttpURLConnection? = null
-            try {
-                val url = URL(urlString)
-                conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    connectTimeout = 5000
-                    readTimeout = 5000
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json; charset=UTF-8")
-                    setRequestProperty("Authorization", "Bearer $rejectToken")
-                }
-
-                val body = "{\"rejectToken\":\"$rejectToken\"}"
-                conn.outputStream.use { os ->
-                    os.write(body.toByteArray(Charsets.UTF_8))
-                    os.flush()
-                }
-
-                val responseCode = conn.responseCode
-                Log.d(TAG, "Reject call response code=$responseCode for callId=$callId (attempt $attempts)")
-                // Terminate on any response (success 200 or 4xx rejection)
-                if (responseCode in 200..499) {
-                    break
-                }
-            } catch (e: IOException) {
-                Log.w(TAG, "Network failure rejecting call $callId (attempt $attempts): ${e.message}")
-                if (attempts < maxAttempts) {
-                    try {
-                        Thread.sleep(500)
-                    } catch (_: InterruptedException) {
-                        break
-                    }
-                }
-            } catch (e: Throwable) {
-                Log.e(TAG, "Unexpected error rejecting call $callId: ${e.message}", e)
-                break
-            } finally {
-                conn?.disconnect()
             }
         }
     }
