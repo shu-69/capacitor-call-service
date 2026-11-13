@@ -79,6 +79,10 @@ export interface CallServicePlugin {
     openAppSettings(): Promise<void>;
     getPendingCallIntent(): Promise<CallIntentResult>;
     clearPendingCallIntent(): Promise<void>;
+    isDeviceLocked(): Promise<{
+        isLocked: boolean;
+    }>;
+    sendToBackground(): Promise<void>;
     addListener(eventName: 'hangup_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'mute_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'speaker_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;

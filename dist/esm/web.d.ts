@@ -20,4 +20,8 @@ export declare class CallServiceWeb extends WebPlugin implements CallServicePlug
     openAppSettings(): Promise<void>;
     getPendingCallIntent(): Promise<CallIntentResult>;
     clearPendingCallIntent(): Promise<void>;
+    isDeviceLocked(): Promise<{
+        isLocked: boolean;
+    }>;
+    sendToBackground(): Promise<void>;
 }

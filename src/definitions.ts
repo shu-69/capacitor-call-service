@@ -96,6 +96,10 @@ export interface CallServicePlugin {
   getPendingCallIntent(): Promise<CallIntentResult>;
   clearPendingCallIntent(): Promise<void>;
 
+  // Device Lock & Backgrounding APIs
+  isDeviceLocked(): Promise<{ isLocked: boolean }>;
+  sendToBackground(): Promise<void>;
+
   addListener(
     eventName: 'hangup_pressed',
     listenerFunc: () => void,

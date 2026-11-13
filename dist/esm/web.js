@@ -54,5 +54,11 @@ export class CallServiceWeb extends WebPlugin {
     async clearPendingCallIntent() {
         // No-op on web
     }
+    async isDeviceLocked() {
+        return { isLocked: false };
+    }
+    async sendToBackground() {
+        // No-op on web
+    }
 }
 //# sourceMappingURL=web.js.map

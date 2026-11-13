@@ -180,26 +180,9 @@ class IncomingCallActivity : AppCompatActivity() {
     private fun handleAccept() {
         Log.d("CALLDBG", "IncomingCallActivity: Accept clicked for callId=$callId")
         RingtonePlayer.stop()
+        launchMainActivityForAccept()
         IncomingCallNotificationManager.cancelIncomingCall(this, callId)
-
-        val km = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && km?.isKeyguardLocked == true) {
-            km.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
-                override fun onDismissSucceeded() {
-                    launchMainActivityForAccept()
-                }
-
-                override fun onDismissCancelled() {
-                    launchMainActivityForAccept()
-                }
-
-                override fun onDismissError() {
-                    launchMainActivityForAccept()
-                }
-            })
-        } else {
-            launchMainActivityForAccept()
-        }
+        finish()
     }
 
     private fun launchMainActivityForAccept() {
@@ -214,7 +197,6 @@ class IncomingCallActivity : AppCompatActivity() {
         if (launchIntent != null) {
             startActivity(launchIntent)
         }
-        finish()
     }
 
     private fun handleDecline() {

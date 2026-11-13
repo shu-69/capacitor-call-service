@@ -82,4 +82,12 @@ export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
   async clearPendingCallIntent(): Promise<void> {
     // No-op on web
   }
+
+  async isDeviceLocked(): Promise<{ isLocked: boolean }> {
+    return { isLocked: false };
+  }
+
+  async sendToBackground(): Promise<void> {
+    // No-op on web
+  }
 }

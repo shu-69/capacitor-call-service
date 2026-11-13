@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.Application
+import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -507,5 +508,28 @@ class CallServicePlugin : Plugin() {
     fun clearPendingCallIntent(call: PluginCall) {
         pendingCallIntent = null
         call.resolve()
+    }
+
+    @PluginMethod
+    fun isDeviceLocked(call: PluginCall) {
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val isLocked = km?.isKeyguardLocked ?: false
+        val ret = JSObject().apply {
+            put("isLocked", isLocked)
+        }
+        call.resolve(ret)
+    }
+
+    @PluginMethod
+    fun sendToBackground(call: PluginCall) {
+        activity?.runOnUiThread {
+            try {
+                activity?.moveTaskToBack(true)
+                call.resolve()
+            } catch (e: Exception) {
+                Log.w("CallServicePlugin", "moveTaskToBack failed: ${e.message}")
+                call.reject(e.message)
+            }
+        } ?: call.resolve()
     }
 }
