@@ -1,5 +1,6 @@
 package com.geekbros.plugins.callservice
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -21,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
 object IncomingCallNotificationManager {
 
     private const val TAG = "IncomingCallNotif"
-    const val CHANNEL_ID = "incoming_calls_v2"
+    const val CHANNEL_ID = "incoming_calls_v3"
     const val MISSED_CALLS_CHANNEL_ID = "missed_calls"
     const val ACTION_OPEN_INCOMING_CALL = "com.geekbros.plugins.callservice.OPEN_INCOMING_CALL"
     const val ACTION_ACCEPT_CALL = "com.geekbros.plugins.callservice.ACCEPT_CALL"
@@ -31,9 +32,16 @@ object IncomingCallNotificationManager {
     private val activeAutoDismissRunnables = ConcurrentHashMap<String, Runnable>()
 
     /**
+     * Checks if an incoming call is currently ringing natively.
+     */
+    fun isCallRinging(callId: String): Boolean {
+        return activeAutoDismissRunnables.containsKey(callId)
+    }
+
+    /**
      * Creates or updates the dedicated high-priority Incoming Calls notification channel.
-     * Notification sound is muted in this channel because RingtonePlayer natively plays
-     * the looping ringtone to prevent double sound.
+     * Configured with default ringtone sound, high importance, public lockscreen visibility,
+     * and a repeating vibration pattern so background and lockscreen calls ring and vibrate.
      */
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -43,7 +51,18 @@ object IncomingCallNotificationManager {
             try {
                 nm?.deleteNotificationChannel("incoming_calls")
                 nm?.deleteNotificationChannel("incoming_calls_channel")
+                nm?.deleteNotificationChannel("incoming_calls_v2")
             } catch (_: Throwable) {}
+
+            val ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                .build()
+
+            val vibrationPattern = longArrayOf(0, 1000, 1000, 1000)
 
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -51,8 +70,9 @@ object IncomingCallNotificationManager {
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Notifications for incoming voice and video calls"
-                setSound(null, null)
-                enableVibration(false)
+                setSound(ringtoneUri, audioAttributes)
+                enableVibration(true)
+                this.vibrationPattern = vibrationPattern
                 lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
                 setShowBadge(true)
             }
@@ -208,7 +228,9 @@ object IncomingCallNotificationManager {
         }
 
         try {
-            val notification = builder.build()
+            val notification = builder.build().apply {
+                flags = flags or Notification.FLAG_INSISTENT
+            }
             NotificationManagerCompat.from(context).notify(notificationId, notification)
             Log.d(TAG, "Incoming call notification posted for callId=$callId (id=$notificationId)")
         } catch (e: SecurityException) {

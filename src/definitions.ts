@@ -73,6 +73,14 @@ export interface CallIntentResult {
   intent?: CallIntentPayload;
 }
 
+export interface CancelIncomingOptions {
+  callId?: string;
+}
+
+export interface CanUseFullScreenIntentResult {
+  granted: boolean;
+}
+
 export interface CallServicePlugin {
   startCallService(options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
   updateCallService(options?: UpdateCallServiceOptions): Promise<void>;
@@ -99,6 +107,15 @@ export interface CallServicePlugin {
   // Device Lock & Backgrounding APIs
   isDeviceLocked(): Promise<{ isLocked: boolean }>;
   sendToBackground(): Promise<void>;
+
+  // In-Call Ringing & Ringtone APIs
+  startRinging(): Promise<void>;
+  stopRinging(): Promise<void>;
+  cancelIncoming(options?: CancelIncomingOptions): Promise<void>;
+
+  // Full-Screen Intent Permission APIs (Android 14+)
+  canUseFullScreenIntent(): Promise<CanUseFullScreenIntentResult>;
+  openFullScreenIntentSettings(): Promise<void>;
 
   addListener(
     eventName: 'hangup_pressed',

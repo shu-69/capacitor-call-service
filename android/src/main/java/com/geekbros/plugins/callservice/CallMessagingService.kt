@@ -140,6 +140,18 @@ class CallMessagingService : FirebaseMessagingService() {
             return
         }
 
+        // Terminal Tombstone Guard: drop pushes for calls that are already terminal/cancelled
+        if (CallTombstoneStore.isTerminal(this, callId)) {
+            Log.w(TAG, "Dropping incoming_call push for terminal callId=$callId (tombstoned).")
+            return
+        }
+
+        // Idempotency: drop duplicate incoming_call push for a call already ringing
+        if (IncomingCallNotificationManager.isCallRinging(callId)) {
+            Log.w(TAG, "Dropping duplicate incoming_call push for callId=$callId (already ringing).")
+            return
+        }
+
         // Stale push guard: If expiresAt has already elapsed by more than 3s, drop it
         val expiresAt = data["expiresAt"]
         if (!expiresAt.isNullOrBlank()) {
@@ -210,6 +222,7 @@ class CallMessagingService : FirebaseMessagingService() {
 
         // 1. Cancel the ringing notification, stop ringtone, and dismiss IncomingCallActivity
         if (callId != "unknown") {
+            CallTombstoneStore.recordTerminal(this, callId)
             IncomingCallNotificationManager.cancelIncomingCall(this, callId)
         }
         RingtonePlayer.stop()
@@ -238,6 +251,7 @@ class CallMessagingService : FirebaseMessagingService() {
         val callId = data["callId"]
         Log.d("CALLDBG", "handleCallCancelled entry: callId=$callId")
         if (!callId.isNullOrBlank()) {
+            CallTombstoneStore.recordTerminal(this, callId)
             Log.d(TAG, "call_cancelled push received. Cancelling notification for callId=$callId")
             IncomingCallNotificationManager.cancelIncomingCall(this, callId)
             IncomingCallActivity.dismiss(callId)

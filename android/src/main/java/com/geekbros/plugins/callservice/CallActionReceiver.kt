@@ -18,6 +18,7 @@ class CallActionReceiver : BroadcastReceiver() {
 
         fun rejectCall(context: Context, callId: String, rejectToken: String, notificationId: Int = IncomingCallNotificationManager.getNotificationId(callId)) {
             Log.d("CALLDBG", "CallActionReceiver.rejectCall triggered: callId=$callId")
+            CallTombstoneStore.recordTerminal(context, callId)
             IncomingCallNotificationManager.cancelIncomingCall(context, callId, notificationId)
             RingtonePlayer.stop()
             IncomingCallActivity.dismiss(callId)
@@ -90,7 +91,8 @@ class CallActionReceiver : BroadcastReceiver() {
 
         val pendingResult = goAsync()
 
-        // 1. Immediately cancel the notification and stop ringtone
+        // 1. Immediately record terminal tombstone, cancel the notification, and stop ringtone
+        CallTombstoneStore.recordTerminal(context, callId)
         IncomingCallNotificationManager.cancelIncomingCall(context, callId, notificationId)
         RingtonePlayer.stop()
         IncomingCallActivity.dismiss(callId)

@@ -5,12 +5,15 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.app.Application
 import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import com.getcapacitor.Bridge
@@ -167,6 +170,9 @@ class CallServicePlugin : Plugin() {
 
         // Dismiss the native incoming ringing notification and stop ringtone immediately
         IncomingCallNotificationManager.cancelIncomingCall(context, callId)
+        if (action == "ACCEPT_CALL") {
+            CallTombstoneStore.recordTerminal(context, callId)
+        }
 
         // If user tapped a missed call notification, clear it from tray
         if (action == "OPEN_MISSED_CALL") {
@@ -247,6 +253,9 @@ class CallServicePlugin : Plugin() {
         val isSpeakerOn = call.getBoolean("isSpeakerOn", false)
         val callId = call.getString("callId", "unknown")
         Log.d("CALLDBG", "startCallService entry: callId=$callId, callType=$callType")
+        if (!callId.isNullOrBlank() && callId != "unknown") {
+            CallTombstoneStore.recordTerminal(context, callId)
+        }
 
         try {
             pendingStartCall = call
@@ -330,6 +339,9 @@ class CallServicePlugin : Plugin() {
     fun stopCallService(call: PluginCall) {
         val callId = call.getString("callId", "unknown")
         Log.d("CALLDBG", "stopCallService entry: callId=$callId")
+        if (!callId.isNullOrBlank() && callId != "unknown") {
+            CallTombstoneStore.recordTerminal(context, callId)
+        }
         try {
             if (::audioRouteManager.isInitialized) {
                 audioRouteManager.stopAudioRouting()
@@ -531,5 +543,92 @@ class CallServicePlugin : Plugin() {
                 call.reject(e.message)
             }
         } ?: call.resolve()
+    }
+
+    @PluginMethod
+    fun startRinging(call: PluginCall) {
+        try {
+            RingtonePlayer.start(context)
+            call.resolve()
+        } catch (e: Exception) {
+            Log.w(TAG, "startRinging failed: ${e.message}")
+            call.reject("Failed to start ringing: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun stopRinging(call: PluginCall) {
+        try {
+            RingtonePlayer.stop()
+            call.resolve()
+        } catch (e: Exception) {
+            Log.w(TAG, "stopRinging failed: ${e.message}")
+            call.reject("Failed to stop ringing: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun cancelIncoming(call: PluginCall) {
+        val callId = call.getString("callId")
+        try {
+            if (!callId.isNullOrBlank()) {
+                CallTombstoneStore.recordTerminal(context, callId)
+                IncomingCallNotificationManager.cancelIncomingCall(context, callId)
+                IncomingCallActivity.dismiss(callId)
+            } else {
+                IncomingCallActivity.dismiss(null)
+            }
+            RingtonePlayer.stop()
+            call.resolve()
+        } catch (e: Exception) {
+            Log.w(TAG, "cancelIncoming failed: ${e.message}")
+            call.reject("Failed to cancel incoming: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun canUseFullScreenIntent(call: PluginCall) {
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            nm?.canUseFullScreenIntent() ?: true
+        } else {
+            true
+        }
+        val ret = JSObject().apply {
+            put("granted", granted)
+        }
+        call.resolve(ret)
+    }
+
+    @PluginMethod
+    fun openFullScreenIntentSettings(call: PluginCall) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                try {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                        Uri.parse("package:${context.packageName}")
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                    call.resolve()
+                    return
+                } catch (e: Exception) {
+                    Log.w(TAG, "ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT not found, falling back: ${e.message}")
+                }
+            }
+            val intent = Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:${context.packageName}")
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            call.resolve()
+        } catch (e: Exception) {
+            Log.w(TAG, "openFullScreenIntentSettings failed: ${e.message}")
+            call.reject("Failed to open full screen intent settings: ${e.message}", e)
+        }
     }
 }

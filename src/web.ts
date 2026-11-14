@@ -11,6 +11,8 @@ import type {
   SetAudioOutputOptions,
   StartAudioRoutingOptions,
   CallIntentResult,
+  CancelIncomingOptions,
+  CanUseFullScreenIntentResult,
 } from './definitions';
 
 export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
@@ -88,6 +90,26 @@ export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
   }
 
   async sendToBackground(): Promise<void> {
+    // No-op on web
+  }
+
+  async startRinging(): Promise<void> {
+    // No-op on web
+  }
+
+  async stopRinging(): Promise<void> {
+    // No-op on web
+  }
+
+  async cancelIncoming(_options?: CancelIncomingOptions): Promise<void> {
+    // No-op on web
+  }
+
+  async canUseFullScreenIntent(): Promise<CanUseFullScreenIntentResult> {
+    return { granted: true };
+  }
+
+  async openFullScreenIntentSettings(): Promise<void> {
     // No-op on web
   }
 }

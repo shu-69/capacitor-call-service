@@ -59,6 +59,12 @@ export interface CallIntentResult {
     hasIntent: boolean;
     intent?: CallIntentPayload;
 }
+export interface CancelIncomingOptions {
+    callId?: string;
+}
+export interface CanUseFullScreenIntentResult {
+    granted: boolean;
+}
 export interface CallServicePlugin {
     startCallService(options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
     updateCallService(options?: UpdateCallServiceOptions): Promise<void>;
@@ -83,6 +89,11 @@ export interface CallServicePlugin {
         isLocked: boolean;
     }>;
     sendToBackground(): Promise<void>;
+    startRinging(): Promise<void>;
+    stopRinging(): Promise<void>;
+    cancelIncoming(options?: CancelIncomingOptions): Promise<void>;
+    canUseFullScreenIntent(): Promise<CanUseFullScreenIntentResult>;
+    openFullScreenIntentSettings(): Promise<void>;
     addListener(eventName: 'hangup_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'mute_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;
     addListener(eventName: 'speaker_pressed', listenerFunc: () => void): Promise<PluginListenerHandle>;

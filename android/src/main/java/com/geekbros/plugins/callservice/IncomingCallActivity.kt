@@ -100,10 +100,7 @@ class IncomingCallActivity : AppCompatActivity() {
             handleDecline()
         }
 
-        // 4. Start Unified Ringtone & Vibration
-        RingtonePlayer.start(this)
-
-        // 5. Schedule Ring Window Auto-Dismiss
+        // 4. Schedule Ring Window Auto-Dismiss
         scheduleAutoDismiss()
     }
 
@@ -170,8 +167,8 @@ class IncomingCallActivity : AppCompatActivity() {
 
         autoDismissRunnable = Runnable {
             Log.d(TAG, "Ringing deadline expired for callId=$callId. Finishing IncomingCallActivity.")
+            CallTombstoneStore.recordTerminal(this, callId)
             IncomingCallNotificationManager.cancelIncomingCall(this, callId)
-            RingtonePlayer.stop()
             finish()
         }
         mainHandler.postDelayed(autoDismissRunnable!!, delayMs)
@@ -179,7 +176,7 @@ class IncomingCallActivity : AppCompatActivity() {
 
     private fun handleAccept() {
         Log.d("CALLDBG", "IncomingCallActivity: Accept clicked for callId=$callId")
-        RingtonePlayer.stop()
+        CallTombstoneStore.recordTerminal(this, callId)
         launchMainActivityForAccept()
         IncomingCallNotificationManager.cancelIncomingCall(this, callId)
         finish()
@@ -201,7 +198,7 @@ class IncomingCallActivity : AppCompatActivity() {
 
     private fun handleDecline() {
         Log.d("CALLDBG", "IncomingCallActivity: Decline clicked for callId=$callId")
-        RingtonePlayer.stop()
+        CallTombstoneStore.recordTerminal(this, callId)
         IncomingCallNotificationManager.cancelIncomingCall(this, callId)
 
         if (callId.isNotBlank() && rejectToken.isNotBlank()) {
@@ -212,7 +209,6 @@ class IncomingCallActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        RingtonePlayer.stop()
         autoDismissRunnable?.let { mainHandler.removeCallbacks(it) }
         autoDismissRunnable = null
         if (currentCallId == callId) {

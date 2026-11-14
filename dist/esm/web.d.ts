@@ -1,5 +1,5 @@
 import { WebPlugin } from '@capacitor/core';
-import type { CallServicePlugin, StartCallServiceOptions, StartCallServiceResult, UpdateCallServiceOptions, StartAvailabilityServiceOptions, StartAvailabilityServiceResult, UpdateAvailabilityServiceOptions, AudioOutputsResult, SetAudioOutputOptions, StartAudioRoutingOptions, CallIntentResult } from './definitions';
+import type { CallServicePlugin, StartCallServiceOptions, StartCallServiceResult, UpdateCallServiceOptions, StartAvailabilityServiceOptions, StartAvailabilityServiceResult, UpdateAvailabilityServiceOptions, AudioOutputsResult, SetAudioOutputOptions, StartAudioRoutingOptions, CallIntentResult, CancelIncomingOptions, CanUseFullScreenIntentResult } from './definitions';
 export declare class CallServiceWeb extends WebPlugin implements CallServicePlugin {
     startCallService(_options?: StartCallServiceOptions): Promise<StartCallServiceResult>;
     updateCallService(_options?: UpdateCallServiceOptions): Promise<void>;
@@ -24,4 +24,9 @@ export declare class CallServiceWeb extends WebPlugin implements CallServicePlug
         isLocked: boolean;
     }>;
     sendToBackground(): Promise<void>;
+    startRinging(): Promise<void>;
+    stopRinging(): Promise<void>;
+    cancelIncoming(_options?: CancelIncomingOptions): Promise<void>;
+    canUseFullScreenIntent(): Promise<CanUseFullScreenIntentResult>;
+    openFullScreenIntentSettings(): Promise<void>;
 }

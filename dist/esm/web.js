@@ -60,5 +60,20 @@ export class CallServiceWeb extends WebPlugin {
     async sendToBackground() {
         // No-op on web
     }
+    async startRinging() {
+        // No-op on web
+    }
+    async stopRinging() {
+        // No-op on web
+    }
+    async cancelIncoming(_options) {
+        // No-op on web
+    }
+    async canUseFullScreenIntent() {
+        return { granted: true };
+    }
+    async openFullScreenIntentSettings() {
+        // No-op on web
+    }
 }
 //# sourceMappingURL=web.js.map
