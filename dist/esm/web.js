@@ -66,6 +66,12 @@ export class CallServiceWeb extends WebPlugin {
     async stopRinging() {
         // No-op on web
     }
+    async startRingback() {
+        // No-op on web
+    }
+    async stopRingback() {
+        // No-op on web
+    }
     async cancelIncoming(_options) {
         // No-op on web
     }

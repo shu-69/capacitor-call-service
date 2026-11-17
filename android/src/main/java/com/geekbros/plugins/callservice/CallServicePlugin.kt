@@ -568,6 +568,28 @@ class CallServicePlugin : Plugin() {
     }
 
     @PluginMethod
+    fun startRingback(call: PluginCall) {
+        try {
+            RingbackPlayer.start()
+            call.resolve()
+        } catch (e: Exception) {
+            Log.w(TAG, "startRingback failed: ${e.message}")
+            call.reject("Failed to start ringback: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
+    fun stopRingback(call: PluginCall) {
+        try {
+            RingbackPlayer.stop()
+            call.resolve()
+        } catch (e: Exception) {
+            Log.w(TAG, "stopRingback failed: ${e.message}")
+            call.reject("Failed to stop ringback: ${e.message}", e)
+        }
+    }
+
+    @PluginMethod
     fun cancelIncoming(call: PluginCall) {
         val callId = call.getString("callId")
         try {

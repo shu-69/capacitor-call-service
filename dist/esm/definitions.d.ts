@@ -91,6 +91,8 @@ export interface CallServicePlugin {
     sendToBackground(): Promise<void>;
     startRinging(): Promise<void>;
     stopRinging(): Promise<void>;
+    startRingback(): Promise<void>;
+    stopRingback(): Promise<void>;
     cancelIncoming(options?: CancelIncomingOptions): Promise<void>;
     canUseFullScreenIntent(): Promise<CanUseFullScreenIntentResult>;
     openFullScreenIntentSettings(): Promise<void>;

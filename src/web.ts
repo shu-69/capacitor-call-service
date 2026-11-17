@@ -101,6 +101,14 @@ export class CallServiceWeb extends WebPlugin implements CallServicePlugin {
     // No-op on web
   }
 
+  async startRingback(): Promise<void> {
+    // No-op on web
+  }
+
+  async stopRingback(): Promise<void> {
+    // No-op on web
+  }
+
   async cancelIncoming(_options?: CancelIncomingOptions): Promise<void> {
     // No-op on web
   }

@@ -111,6 +111,8 @@ export interface CallServicePlugin {
   // In-Call Ringing & Ringtone APIs
   startRinging(): Promise<void>;
   stopRinging(): Promise<void>;
+  startRingback(): Promise<void>;
+  stopRingback(): Promise<void>;
   cancelIncoming(options?: CancelIncomingOptions): Promise<void>;
 
   // Full-Screen Intent Permission APIs (Android 14+)

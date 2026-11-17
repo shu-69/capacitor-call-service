@@ -26,6 +26,8 @@ export declare class CallServiceWeb extends WebPlugin implements CallServicePlug
     sendToBackground(): Promise<void>;
     startRinging(): Promise<void>;
     stopRinging(): Promise<void>;
+    startRingback(): Promise<void>;
+    stopRingback(): Promise<void>;
     cancelIncoming(_options?: CancelIncomingOptions): Promise<void>;
     canUseFullScreenIntent(): Promise<CanUseFullScreenIntentResult>;
     openFullScreenIntentSettings(): Promise<void>;
